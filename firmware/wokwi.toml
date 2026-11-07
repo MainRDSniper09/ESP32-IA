@@ -1,0 +1,14 @@
+# Simulación en Wokwi (extensión de VS Code): https://docs.wokwi.com/vscode/getting-started
+# 1. Compile primero:  pio run -e esp32s3
+# 2. En VS Code: F1 -> "Wokwi: Start Simulator"
+# La red simulada "Wokwi-GUEST" (sin clave) tiene salida a internet, así que
+# NTP y el LLM funcionan si configura SECRET_WIFI_SSID = "Wokwi-GUEST".
+[wokwi]
+version = 1
+firmware = ".pio/build/esp32s3/firmware.bin"
+elf = ".pio/build/esp32s3/firmware.elf"
+
+# Abre la interfaz web del ESP32 simulado en http://localhost:8180
+[[net.forward]]
+from = "localhost:8180"
+to = "target:80"

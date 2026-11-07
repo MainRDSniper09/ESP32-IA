@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "type": "plan",
+  "steps": [
+    {
+      "action": "exec_shell",
+      "params": {
+        "cmd": "reboot"
+      }
+    }
+  ]
+}

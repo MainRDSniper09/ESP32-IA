@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "type": "plan",
+  "steps": [
+    {
+      "action": "set_device",
+      "params": {
+        "device": "luz_oficina",
+        "state": "on"
+      },
+      "when": {
+        "type": "delay",
+        "seconds": "900"
+      }
+    }
+  ]
+}

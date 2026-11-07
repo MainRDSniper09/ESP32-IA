@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "type": "clarification",
+  "question": "¿Cuándo?",
+  "steps": [
+    {
+      "action": "set_device",
+      "params": {
+        "device": "luz_oficina",
+        "state": "on"
+      }
+    }
+  ]
+}

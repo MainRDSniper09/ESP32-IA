@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "type": "plan",
+  "summary": "Cancelar la tarea 3",
+  "steps": [
+    {
+      "action": "cancel_task",
+      "params": {
+        "task_id": 3
+      }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "type": "plan",
+  "summary": "Consultar accesos abiertos y tareas programadas",
+  "steps": [
+    {
+      "action": "read_access",
+      "params": {
+        "target": "accesses",
+        "filter": "open"
+      }
+    },
+    {
+      "action": "list_tasks"
+    }
+  ]
+}
