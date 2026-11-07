@@ -1,0 +1,17 @@
+{
+  "tipo": "plan",
+  "mensaje": "18:00 oficina y 18:15 parqueadero",
+  "acciones": [
+    {
+      "accion": "encender",
+      "dispositivo": "luz_oficina",
+      "hora": "18:00"
+    },
+    {
+      "accion": "encender",
+      "dispositivo": "luz_parqueadero",
+      "hora": "18:00",
+      "minutos_despues": 15
+    }
+  ]
+}

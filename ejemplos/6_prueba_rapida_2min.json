@@ -1,0 +1,16 @@
+{
+  "tipo": "plan",
+  "mensaje": "Prueba: encender en 1 minuto y apagar 1 minuto después",
+  "acciones": [
+    {
+      "accion": "encender",
+      "dispositivo": "luz_entrada",
+      "minutos_despues": 1
+    },
+    {
+      "accion": "apagar",
+      "dispositivo": "luz_entrada",
+      "minutos_despues": 2
+    }
+  ]
+}
