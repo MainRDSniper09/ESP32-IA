@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "type": "plan",
+  "summary": "Todos los días a las 06:30 encender aspersores 20 minutos",
+  "steps": [
+    {
+      "action": "set_group",
+      "params": {
+        "group": "sprinklers",
+        "state": "on"
+      },
+      "when": {
+        "type": "at",
+        "time": "06:30",
+        "repeat": "daily"
+      }
+    },
+    {
+      "action": "set_group",
+      "params": {
+        "group": "sprinklers",
+        "state": "off"
+      },
+      "when": {
+        "type": "at",
+        "time": "06:50",
+        "repeat": "daily"
+      }
+    }
+  ]
+}

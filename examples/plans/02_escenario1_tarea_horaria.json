@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "type": "plan",
+  "summary": "A las 20:00 encender luz de entrada y aspersores, y avisar si hay puertas abiertas",
+  "steps": [
+    {
+      "action": "set_device",
+      "params": {
+        "device": "luz_entrada",
+        "state": "on"
+      },
+      "when": {
+        "type": "at",
+        "time": "20:00"
+      }
+    },
+    {
+      "action": "set_group",
+      "params": {
+        "group": "sprinklers",
+        "state": "on"
+      },
+      "when": {
+        "type": "at",
+        "time": "20:00"
+      }
+    },
+    {
+      "action": "notify",
+      "params": {
+        "message": "Hay puertas abiertas",
+        "level": "alert"
+      },
+      "when": {
+        "type": "at",
+        "time": "20:00"
+      },
+      "condition": {
+        "type": "any_open",
+        "target": "doors"
+      }
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "type": "plan",
+  "steps": [
+    {
+      "action": "set_device",
+      "params": {
+        "device": "luz_oficina",
+        "state": "on"
+      },
+      "when": {
+        "type": "after_step",
+        "step": 1,
+        "seconds": 60
+      }
+    },
+    {
+      "action": "set_device",
+      "params": {
+        "device": "luz_bodega",
+        "state": "on"
+      }
+    }
+  ]
+}

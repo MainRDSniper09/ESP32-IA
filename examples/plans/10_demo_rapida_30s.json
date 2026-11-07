@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "type": "plan",
+  "summary": "Demostración: encender en 30 s y apagar 30 s después",
+  "steps": [
+    {
+      "action": "set_device",
+      "params": {
+        "device": "luz_entrada",
+        "state": "on"
+      },
+      "when": {
+        "type": "delay",
+        "seconds": 30
+      }
+    },
+    {
+      "action": "set_device",
+      "params": {
+        "device": "luz_entrada",
+        "state": "off"
+      },
+      "when": {
+        "type": "after_step",
+        "step": 0,
+        "seconds": 30
+      }
+    },
+    {
+      "action": "notify",
+      "params": {
+        "message": "Demo: hay accesos abiertos",
+        "level": "alert"
+      },
+      "when": {
+        "type": "delay",
+        "seconds": 30
+      },
+      "condition": {
+        "type": "any_open",
+        "target": "accesses"
+      }
+    }
+  ]
+}

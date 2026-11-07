@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "type": "plan",
+  "summary": "Revisar puertas y apagar las luces si todas están cerradas",
+  "steps": [
+    {
+      "action": "read_access",
+      "params": {
+        "target": "doors",
+        "filter": "all"
+      }
+    },
+    {
+      "action": "set_group",
+      "params": {
+        "group": "lights",
+        "state": "off"
+      },
+      "condition": {
+        "type": "all_closed",
+        "target": "doors"
+      }
+    }
+  ]
+}
