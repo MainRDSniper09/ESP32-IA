@@ -1,0 +1,34 @@
+# ---------------------------------------------------------- Credenciales
+# NUNCA subir claves: copie agente_secrets.example.h como agente_secrets.h
+firmware/AgenteESP32/src/config/agente_secrets.h
+**/agente_secrets.h
+.env
+*.pem
+*.key
+
+# ---------------------------------------------------------- PlatformIO / IDE
+.pio/
+.pioenvs/
+.piolibdeps/
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.code-workspace
+
+# ---------------------------------------------------------- Compilación
+build/
+*.bin
+*.elf
+*.map
+*.o
+
+# ---------------------------------------------------------- Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# ---------------------------------------------------------- Sistema
+.DS_Store
+Thumbs.db
+desktop.ini
