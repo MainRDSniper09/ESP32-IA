@@ -1,260 +1,227 @@
-<div align="center">
+# 🏢 Agente ESP32-S3: automatización de una empresa con lenguaje natural
 
-# 🏢 Agente ESP32-S3 — Automatización y supervisión empresarial con LLM
+Proyecto final de **Inteligencia Artificial y Sistemas Embebidos**.
 
-**Órdenes en lenguaje natural → plan JSON validado → ejecución determinista en un microcontrolador**
-
-[![CI](https://github.com/MainRDSniper09/ESP32-IA/actions/workflows/ci.yml/badge.svg)](https://github.com/MainRDSniper09/ESP32-IA/actions/workflows/ci.yml)
-![Plataforma](https://img.shields.io/badge/plataforma-ESP32--S3-E7352C?logo=espressif&logoColor=white)
-![Lenguaje](https://img.shields.io/badge/C%2B%2B-Arduino-00979D?logo=arduino&logoColor=white)
-![Pruebas](https://img.shields.io/badge/pruebas-23%20unitarias-2ea44f)
-[![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-blue.svg)](LICENSE)
-
-*Proyecto integrador · Inteligencia Artificial y Sistemas Embebidos*
-
-</div>
-
----
+Un **ESP32-S3** recibe órdenes escritas en español, por ejemplo:
 
 > «A las 8:00 p. m. enciende la luz de la entrada y los aspersores; avísame si alguna puerta está abierta.»
 
-Este proyecto convierte una frase así en acciones **verificables** sobre un ESP32-S3:
-un modelo de lenguaje (LLM) remoto interpreta la orden y devuelve un **JSON estructurado**;
-el firmware lo **valida** contra un catálogo cerrado de funciones C++, lo **programa** sin
-bloquear el sistema, lo **guarda** en memoria no volátil y lo **ejecuta** sobre LED (luces y
-aspersores), evaluando las condiciones con interruptores reales (puertas y ventanas).
+Un **modelo de lenguaje (LLM)** en internet traduce la orden a un **JSON**, y el ESP32
+**revisa** ese JSON y lo **ejecuta**: enciende LED (luces y aspersores), vigila
+interruptores (puertas y ventanas), programa tareas para más tarde y avisa cuando algo
+pasa.
 
-**El LLM nunca toca un pin.** Solo elige operaciones y parámetros; toda decisión con efecto
-físico es código determinista en el microcontrolador.
+> 🔑 **Idea clave:** el LLM solo *interpreta* el texto. Quien *decide y actúa* es el ESP32,
+> que solo acepta acciones de una lista permitida y revisa los sensores reales.
 
-## 📑 Contenido
+---
 
-- [Qué hace](#-qué-hace)
-- [Arquitectura](#-arquitectura)
-- [Inicio rápido](#-inicio-rápido)
-- [Hardware](#-hardware)
-- [Formato JSON](#-formato-json)
-- [API REST](#-api-rest)
-- [Comportamiento ante fallos](#-comportamiento-ante-fallos)
-- [Pruebas](#-pruebas)
-- [Estructura del repositorio](#-estructura-del-repositorio)
-- [Cumplimiento del enunciado](#-cumplimiento-del-enunciado)
-- [Documentación](#-documentación)
-- [Contribuir y licencia](#-contribuir)
+## 📋 Contenido
 
-## ✨ Qué hace
+1. [¿Qué puede hacer?](#-qué-puede-hacer)
+2. [¿Cómo funciona?](#-cómo-funciona)
+3. [Materiales y conexiones](#-materiales-y-conexiones)
+4. [Instalación paso a paso](#-instalación-paso-a-paso)
+5. [Cómo usarlo](#️-cómo-usarlo)
+6. [Archivos del proyecto](#-archivos-del-proyecto)
+7. [¿Qué pasa si algo falla?](#-qué-pasa-si-algo-falla)
+8. [Requisitos del taller](#-requisitos-del-taller)
+9. [Documentación](#-documentación)
 
-| Capacidad | Detalle |
-|-----------|---------|
-| 🗣️ **Lenguaje natural** | Interfaz web (chat) o API REST. Interpreta intenciones, dispositivos, horas, intervalos y condiciones. |
-| 💡 **Control** | 4 luces y 2 aspersores (LED) — individual o por grupo. |
-| 🚪 **Monitoreo** | 3 puertas y 2 ventanas (interruptores) con antirrebote, cambios en tiempo real. |
-| ⏰ **Planificación** | Inmediata, a una hora (`20:00`), con retardo, secuencias (`15 min después`), diaria. Sin bloquear. |
-| 🔀 **Condiciones** | «si todas las puertas están cerradas», «si alguna está abierta»… evaluadas **con los sensores** al ejecutar. |
-| 💾 **Persistencia** | Tareas en NVS; se recuperan y revalidan tras un reinicio. Tareas perdidas → alerta. |
-| 🔔 **Alertas** | Aviso en la interfaz, LED rojo, zumbador y (opcional) Telegram. |
-| ❓ **Ambigüedad** | «más tarde» → pide aclaración antes de guardar nada (barrera local + LLM). |
-| 🛡️ **Validación** | Esquema, tipos, nombres, horarios; acciones desconocidas rechazadas; planes atómicos. |
-| 🔌 **Robustez** | Sin Wi-Fi → punto de acceso local. Sin hora → solo órdenes inmediatas. LLM caído → nada se ejecuta. |
-| 🔁 **Proveedor intercambiable** | Claude (por defecto) o cualquier API compatible con OpenAI, incluido Ollama local. |
+---
 
-## 🧭 Arquitectura
+## ✨ ¿Qué puede hacer?
+
+| Función | Ejemplo |
+|---------|---------|
+| 💡 Encender/apagar al instante | «Enciende la luz de la bodega» |
+| ⏰ Programar a una hora | «A las 8:00 p. m. enciende los aspersores» |
+| 🔁 Secuencias | «Enciende la oficina a las 6 p. m. y, quince minutos después, el parqueadero» |
+| 🚪 Consultar puertas/ventanas | «¿Qué puertas o ventanas están abiertas?» |
+| 🔀 Órdenes con condición | «Si todas las puertas están cerradas, apaga las luces» |
+| 🔔 Alertas | «Avísame si alguna puerta está abierta» → aviso en la página + LED rojo |
+| 📝 Ver y cancelar tareas | «¿Qué tareas quedaron programadas?» / botón *Cancelar* |
+| ❓ Pedir aclaración | «Enciende los aspersores más tarde» → *¿A qué hora?* |
+| 💾 Recordar tras reinicio | Las tareas se guardan en memoria y se recuperan al reiniciar |
+
+## 🧠 ¿Cómo funciona?
 
 ```mermaid
 flowchart LR
-    U([👤 Usuario]) --> UI[Interfaz web / REST]
-    UI --> G{Barrera de<br/>ambigüedad}
-    G -->|clara| LLM[(LLM remoto<br/>HTTPS)]
-    G -->|ambigua| Q[/Pregunta de aclaración/]
-    LLM -->|JSON| V{Validación<br/>en el ESP32-S3}
-    V -->|inválido| R[/Rechazo con errores/]
-    V -->|válido| P[Planificador<br/>+ NVS]
-    P --> F[Catálogo de<br/>funciones C++]
-    S[[Interruptores<br/>puertas/ventanas]] --> F
-    F --> L[[LED luces/aspersores]]
-    F --> N[[Alertas: web · LED · zumbador · Telegram]]
+    A([👤 Usuario]) -->|escribe una orden| B[Página web]
+    B --> C[ESP32-S3]
+    C -->|orden + instrucciones| D[(LLM Claude<br/>en internet)]
+    D -->|JSON| C
+    C --> E{¿JSON válido?}
+    E -->|no| F[❌ Se rechaza]
+    E -->|sí, ahora| G[💡 Ejecuta]
+    E -->|sí, más tarde| H[⏰ Guarda la tarea]
+    H -->|llega la hora| G
+    I[🚪 Interruptores] --> G
 ```
 
-- **`core/`** — lógica pura en C++11 (validador, planificador, agente, prompt). No depende de Arduino: se prueba en el PC.
-- **`platform/`** — adaptadores ESP32: GPIO, NTP, NVS, Wi-Fi, FreeRTOS, notificaciones.
-- **`llm/`** y **`web/`** — cliente HTTPS del LLM y API REST + interfaz.
+1. Escribes la orden en la página web que muestra el propio ESP32.
+2. El ESP32 la envía al LLM (Claude) por internet.
+3. El LLM responde con un JSON como este:
+   ```json
+   {"tipo": "plan", "mensaje": "Encender luz de entrada a las 20:00",
+    "acciones": [{"accion": "encender", "dispositivo": "luz_entrada", "hora": "20:00"}]}
+   ```
+4. El ESP32 lo **revisa**: ¿la acción está permitida?, ¿el dispositivo existe?, ¿la hora es válida?
+   Si algo está mal, **no hace nada**.
+5. Si está bien, lo ejecuta ya o lo guarda para la hora indicada.
 
-Dos tareas de FreeRTOS garantizan que **el monitoreo nunca se detiene**: `ioTask` (núcleo 1,
-cada 10 ms) lee interruptores y ejecuta tareas vencidas; `net` (núcleo 0) espera al LLM.
+Mientras tanto, el ESP32 vigila las puertas todo el tiempo (usa sus dos núcleos, así que
+esperar al LLM no detiene nada).
 
-➡️ Detalles, diagramas de secuencia y decisiones de diseño: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**
+➡️ Explicación completa para principiantes: **[docs/COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md)**
 
-## 🚀 Inicio rápido
+## 🔧 Materiales y conexiones
 
+- 1 ESP32-S3 · 7 LED (4 luces, 2 aspersores, 1 alerta) con resistencias de 220 Ω · 5 interruptores · protoboard y cables.
+
+| Pin | Dispositivo | | Pin | Dispositivo |
+|:--:|---|---|:--:|---|
+| 4 | 💡 Luz de la entrada | | 8 | 🚪 Puerta principal |
+| 5 | 💡 Luz de la oficina | | 9 | 🚪 Puerta de la bodega |
+| 6 | 💡 Luz del parqueadero | | 10 | 🚪 Puerta de la oficina |
+| 7 | 💡 Luz de la bodega | | 11 | 🪟 Ventana de la oficina |
+| 15 | 💧 Aspersor frontal | | 12 | 🪟 Ventana de la recepción |
+| 16 | 💧 Aspersor trasero | | 17 | 🔴 LED de alerta |
+
+- **LED:** `pin → resistencia 220 Ω → LED → GND`
+- **Interruptor:** `pin → interruptor → GND` · cerrado = puerta **cerrada**, abierto = puerta **abierta**
+
+➡️ Diagramas y detalles: **[docs/CONEXIONES.md](docs/CONEXIONES.md)**
+
+## 🚀 Instalación paso a paso
+
+### 1. Preparar el Arduino IDE
+1. Instala el [Arduino IDE 2](https://www.arduino.cc/en/software).
+2. *Archivo → Preferencias → URLs adicionales de gestor de placas*, pega:
+   `https://espressif.github.io/arduino-esp32/package_esp32_index.json`
+3. *Herramientas → Placa → Gestor de placas*: instala **esp32** (de Espressif Systems).
+   Versión probada: **2.0.17**.
+4. *Herramientas → Gestionar bibliotecas*: instala **ArduinoJson** (de Benoit Blanchon), versión 7.
+
+### 2. Descargar el proyecto
 ```bash
 git clone https://github.com/MainRDSniper09/ESP32-IA.git
-cd ESP32-IA/firmware/AgenteESP32/src/config
-cp agente_secrets.example.h agente_secrets.h     # y complete Wi-Fi + clave del LLM
-cd ../../..                                      # vuelve a firmware/
-pio run -e esp32s3 -t upload && pio device monitor
 ```
+O en GitHub: botón verde *Code → Download ZIP*.
 
-Abra **http://agente-esp32.local** (o la IP que imprime la consola) y escriba una orden.
+### 3. Poner tus claves
+1. En la carpeta `AgenteESP32/`, copia `credenciales_ejemplo.h` y renómbralo a **`credenciales.h`**.
+2. Ábrelo y escribe tu red Wi-Fi y tu clave de la API de Claude
+   (se obtiene en [console.anthropic.com](https://console.anthropic.com)):
+   ```cpp
+   #define WIFI_NOMBRE  "MiRed"
+   #define WIFI_CLAVE   "MiClave"
+   #define LLM_API_KEY  "sk-ant-..."
+   ```
+   `credenciales.h` **no se sube a GitHub** (está en `.gitignore`).
 
-| ¿Sin hardware? | ¿Arduino IDE? | ¿Sin clave de LLM? |
-|---|---|---|
-| Simúlelo en **Wokwi** con `firmware/diagram.json` | Abra `firmware/AgenteESP32/AgenteESP32.ino` | Use el control manual y `POST /api/plan` con los JSON de `examples/plans/` |
+### 4. Subir el programa
+1. Abre `AgenteESP32/AgenteESP32.ino` en el Arduino IDE.
+2. *Herramientas → Placa*: **ESP32S3 Dev Module**. Elige el puerto COM.
+3. Pulsa **Subir** (→).
+4. Abre el **Monitor Serie** a **115200** baudios. Verás algo como:
+   ```
+   === Agente ESP32-S3 ===
+   Conectando a Wi-Fi.....
+   Conectado. Abre en el navegador: http://192.168.1.60
+   [aviso] Hora sincronizada por internet: 06/11 17:58
+   ```
+5. Abre esa dirección en el navegador (desde la misma red Wi-Fi).
 
-➡️ Guía paso a paso (PlatformIO, Arduino IDE, Wokwi, proveedores de LLM, zona horaria, problemas comunes): **[docs/SETUP.md](docs/SETUP.md)**
+> Si el ESP32 no encuentra tu red, crea la suya: conéctate a **Agente-ESP32**
+> (clave `agente1234`) y abre **http://192.168.4.1**.
 
-## 🔧 Hardware
+## 🖥️ Cómo usarlo
 
-| GPIO | Dispositivo | | GPIO | Dispositivo |
-|:---:|---|---|:---:|---|
-| 4 | 💡 `luz_entrada` | | 8 | 🚪 `puerta_principal` |
-| 5 | 💡 `luz_oficina` | | 9 | 🚪 `puerta_bodega` |
-| 6 | 💡 `luz_parqueadero` | | 10 | 🚪 `puerta_oficina` |
-| 7 | 💡 `luz_bodega` | | 11 | 🪟 `ventana_oficina` |
-| 15 | 💧 `aspersor_frontal` | | 12 | 🪟 `ventana_recepcion` |
-| 16 | 💧 `aspersor_trasero` | | 17 / 18 / 21 | 🔴 LED alerta / 🔊 zumbador / 🟢 LED estado |
+La página tiene cuatro partes:
 
-- **Salidas:** `GPIO → 220 Ω → LED → GND` (alto = encendido).
-- **Entradas:** `GPIO → interruptor → GND` con *pull-up* interno. **Contacto cerrado = CERRADA**; abierto o cable suelto = ABIERTA (falla segura).
+- **Escribe una orden:** el cuadro de texto, botones con ejemplos y la respuesta del sistema
+  (incluido el JSON que devolvió el LLM, para ver qué entendió).
+- **Luces y aspersores:** estado de cada uno y botón para encender/apagar.
+- **Puertas y ventanas:** abierta o cerrada, en tiempo real.
+- **Tareas programadas** (con botón *Cancelar*) y **Avisos** (las alertas aparecen en rojo).
 
-➡️ Lista de materiales, diagrama de conexiones y por qué se eligieron esos pines: **[docs/HARDWARE.md](docs/HARDWARE.md)**
-
-## 🧾 Formato JSON
-
-El LLM debe responder **solo** con este formato; el firmware lo valida campo por campo.
-
-```json
-{
-  "version": 1,
-  "type": "plan",
-  "summary": "18:00 luz de oficina; 15 min después luz del parqueadero",
-  "steps": [
-    { "action": "set_device", "params": { "device": "luz_oficina", "state": "on" },
-      "when": { "type": "at", "time": "18:00" } },
-    { "action": "set_device", "params": { "device": "luz_parqueadero", "state": "on" },
-      "when": { "type": "after_step", "step": 0, "seconds": 900 } }
-  ]
-}
-```
-
-| Elemento | Opciones |
-|----------|----------|
-| `type` | `plan` · `clarification` (con `question`) · `unsupported` |
-| `action` | `set_device` · `set_group` · `notify` · `read_access` · `list_tasks` · `cancel_task` · `system_status` |
-| `when` | `now` · `at` (`HH:MM`, `date`, `repeat:"daily"`) · `delay` (`seconds`) · `after_step` (`step`, `seconds`) |
-| `condition` | `all_closed` · `any_open` · `is_open` · `is_closed` sobre `doors` · `windows` · `accesses` · id |
-
-➡️ Especificación completa, catálogo de códigos de error y los 4 escenarios del enunciado: **[docs/JSON_FORMAT.md](docs/JSON_FORMAT.md)** · Esquema: [`docs/schema/plan.schema.json`](docs/schema/plan.schema.json) · Ejemplos: [`examples/plans/`](examples/plans)
-
-## 🌐 API REST
-
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| `POST` | `/api/command` | Instrucción en lenguaje natural → `202 {job_id}` |
-| `GET` | `/api/jobs?id=N` | Resultado de la instrucción (plan, pasos, errores, salida del LLM) |
-| `POST` | `/api/plan` · `/api/plan/validate` | Ejecutar / validar un plan JSON sin LLM |
-| `GET` | `/api/status` · `/api/devices` · `/api/accesses` · `/api/catalog` | Consultas |
-| `POST` | `/api/devices/set` | Control manual |
-| `GET` / `DELETE` | `/api/tasks` | Listar / cancelar tareas |
-| `GET` / `POST` | `/api/events` · `/api/events/ack` | Eventos y alertas |
+También se puede usar sin la página, desde cualquier programa, con la **API**:
 
 ```bash
-curl -X POST http://agente-esp32.local/api/command -H "Content-Type: application/json" \
-     -d '{"text":"Revisa las puertas y, si todas están cerradas, apaga todas las luces"}'
-# {"job_id":3,"status":"queued","poll":"/api/jobs?id=3"}
+curl -X POST http://192.168.1.60/api/orden -d "{\"texto\": \"Apaga todas las luces\"}"
+curl -X POST http://192.168.1.60/api/plan -d @ejemplos/1_control_inmediato.json   # sin LLM
+curl http://192.168.1.60/api/estado
 ```
 
-O con el cliente incluido: `python tools/agent_cli.py say "Apaga todas las luces"`.
+➡️ Manual de la API (cada petición y respuesta JSON explicada): **[docs/API.md](docs/API.md)**
+➡️ Formato del JSON y reglas de validación: **[docs/FORMATO_JSON.md](docs/FORMATO_JSON.md)**
 
-➡️ Manual completo con cada ruta, cuerpos, respuestas, códigos de error y ejemplos en curl/Python/JS: **[docs/API.md](docs/API.md)**
-
-## 🧯 Comportamiento ante fallos
-
-| Situación | Resultado |
-|-----------|-----------|
-| **Sin Wi-Fi** | Punto de acceso `Agente-ESP32` (192.168.4.1): interfaz, control manual y tareas siguen funcionando; el LLM no. |
-| **Sin hora (NTP)** | Solo se aceptan órdenes inmediatas; las tareas esperan a sincronizar. |
-| **Falla el LLM** | 1 reintento; si persiste, error explícito y **nada se ejecuta**. El resto del sistema sigue. |
-| **Reinicio** | Salidas apagadas; tareas recuperadas de NVS y revalidadas; vencidas hace > 10 min → alerta, no se ejecutan. |
-
-➡️ **[docs/OPERACION_Y_FALLOS.md](docs/OPERACION_Y_FALLOS.md)**
-
-## 🧪 Pruebas
-
-```bash
-cd firmware && pio test -e native      # 23 pruebas unitarias del núcleo en el PC
-```
-
-Cubren: operaciones válidas, rechazo de JSON/parámetros incorrectos, instrucciones ambiguas,
-condiciones con sensores reales, secuencias, cancelación, **recuperación tras reinicio** y
-tareas perdidas. GitHub Actions compila el firmware y ejecuta las pruebas en cada *push*.
-
-➡️ Informe de pruebas y protocolo de integración en el prototipo: **[docs/TESTING.md](docs/TESTING.md)**
-
-## 📁 Estructura del repositorio
+## 📁 Archivos del proyecto
 
 ```
 ESP32-IA/
-├── firmware/
-│   ├── platformio.ini                 # entornos esp32s3 y native (pruebas)
-│   ├── diagram.json · wokwi.toml      # simulación en Wokwi
-│   ├── AgenteESP32/                   # carpeta del sketch (también abre en Arduino IDE)
-│   │   ├── AgenteESP32.ino            # composición: componentes + tareas FreeRTOS
-│   │   └── src/
-│   │       ├── config/                # Pins.h · AppConfig.h · agente_secrets.example.h
-│   │       ├── core/                  # lógica pura: Agent, PlanValidator, TaskScheduler,
-│   │       │                          #   ActionCatalog, DeviceCatalog, PromptBuilder, EventLog...
-│   │       ├── platform/              # Esp32Hardware, Esp32Services (NTP/NVS/mutex),
-│   │       │                          #   NetworkManager, JobManager, Notifiers
-│   │       ├── llm/                   # LlmClient (HTTPS)
-│   │       └── web/                   # WebApi (REST) · WebPage.h (generado)
-│   └── test/test_core/                # pruebas unitarias (Unity)
-├── web/index.html                     # fuente de la interfaz web
-├── docs/                              # arquitectura, API, JSON, hardware, setup, fallos, pruebas, demo
-├── examples/plans/                    # planes JSON válidos e inválidos
-├── tools/                             # build_web.py · validate_examples.py · agent_cli.py
-└── .github/                           # CI, plantillas de issues y PR
+├── AgenteESP32/                  ← el programa (se abre con Arduino IDE)
+│   ├── AgenteESP32.ino           inicio: Wi-Fi, monitoreo y servidor web
+│   ├── config.h                  pines, zona horaria, límites
+│   ├── credenciales_ejemplo.h    plantilla de claves (cópiala como credenciales.h)
+│   ├── dispositivos.h / .cpp     LED e interruptores
+│   ├── plan.h / .cpp             revisar y ejecutar el JSON (acciones permitidas)
+│   ├── tareas.h / .cpp           tareas programadas y memoria no volátil
+│   ├── avisos.h / .cpp           notificaciones y LED de alerta
+│   ├── llm.h / .cpp              conexión con Claude
+│   ├── servidor_web.h / .cpp     página web y API
+│   └── pagina_web.h              diseño de la página (HTML)
+├── docs/                         ← documentación
+├── ejemplos/                     ← planes JSON de prueba (válidos e inválidos)
+├── README.md
+└── LICENSE
 ```
 
-## ✅ Cumplimiento del enunciado
+## 🧯 ¿Qué pasa si algo falla?
 
-| Requisito | Dónde |
-|-----------|-------|
-| Interpretación (intenciones, dispositivos, horarios, intervalos, condiciones) | `core/PromptBuilder.cpp`, `core/PlanValidator.cpp` |
-| Control de luces y aspersores (salidas digitales) | `core/Agent.cpp` (`doSetDevice`, `doSetGroup`), `platform/Esp32Hardware.cpp` |
-| Monitoreo de puertas/ventanas (entradas digitales) | `platform/Esp32Hardware.cpp` (antirrebote), `Agent::doReadAccess` |
-| Planificación inmediata / horaria / secuencias sin bloquear | `core/TaskScheduler.cpp`, `ioTask` en `AgenteESP32.ino` |
-| Persistencia en memoria no volátil y recuperación tras reinicio | `platform/Esp32Services.cpp` (NVS), `Agent::begin` |
-| Alertas visibles / canal de mensajería | `core/EventLog.cpp`, `platform/Notifiers.cpp`, interfaz web |
-| Listar, cancelar tareas, consultar estado | `/api/tasks`, acciones `list_tasks`, `cancel_task`, `system_status` |
-| ESP32-S3 + C++ Arduino + Wi-Fi + LLM remoto | `platformio.ini`, `llm/LlmClient.cpp` |
-| Sin frameworks de agentes ni *tool calling* | Solo `HTTPClient`, `WiFiClientSecure`, `ArduinoJson`, `Preferences`, `WebServer` |
-| Catálogo explícito de funciones autorizadas | `core/ActionCatalog.cpp` + `Agent::do*` |
-| Validar esquema, tipos, dispositivos y horarios; rechazar acciones desconocidas | `core/PlanValidator.cpp` |
-| NTP + zona horaria; comportamiento sin Wi-Fi, falla de API, reinicio | `Esp32Clock`, `AppConfig.h`, [OPERACION_Y_FALLOS.md](docs/OPERACION_Y_FALLOS.md) |
-| Credenciales protegidas | `agente_secrets.h` en `.gitignore`, [SECURITY_NOTES.md](docs/SECURITY_NOTES.md) |
-| Ambigüedad → aclaración antes de guardar | `text::findAmbiguousTime`, `type: clarification` |
-| Condicionales evaluadas localmente con sensores | `Agent::evaluate` |
-| Entregables: código, diagrama, formato JSON, pruebas, guion del video | Este repositorio · [ARCHITECTURE](docs/ARCHITECTURE.md) · [JSON_FORMAT](docs/JSON_FORMAT.md) · [TESTING](docs/TESTING.md) · [DEMO](docs/DEMO.md) |
+| Situación | Qué hace el sistema |
+|-----------|---------------------|
+| **No hay Wi-Fi** | Crea su propia red (*Agente-ESP32*). La página, los botones, el monitoreo y las tareas siguen funcionando. Las órdenes escritas no (sin internet no hay LLM). |
+| **Falla el LLM** | Muestra el error, genera una alerta y **no ejecuta nada**. Todo lo demás sigue igual. |
+| **Se reinicia o se va la luz** | Arranca con todo apagado, **recupera las tareas** guardadas y las ejecuta a su hora. Si una tarea se pasó por más de 10 minutos, no la ejecuta tarde y avisa. |
+| **Todavía no tiene la hora** | Acepta órdenes inmediatas, pero no programadas, hasta sincronizar la hora por internet. |
+| **Orden ambigua** | Pregunta antes de guardar nada. |
+| **JSON incorrecto** | Rechaza la orden completa y explica el error. |
+
+## ✅ Requisitos del taller
+
+| Requisito | Cómo se cumple |
+|-----------|----------------|
+| Interpretar intenciones, dispositivos, horarios, intervalos y condiciones | El LLM devuelve `accion`, `dispositivo`, `hora`, `minutos_despues`, `condicion` (`llm.cpp`) |
+| Encender/apagar luces y aspersores (salidas digitales) | `dispositivos.cpp` |
+| Consultar puertas y ventanas (entradas digitales) | `dispositivos.cpp`, acción `consultar_accesos` |
+| Órdenes inmediatas, a una hora y secuencias sin bloquear | `tareas.cpp` + tarea de monitoreo en el núcleo 1 |
+| Guardar tareas en memoria no volátil y recuperarlas | `tareas.cpp` (librería `Preferences`) |
+| Alertas visibles | Página web + LED rojo (`avisos.cpp`) |
+| Listar y cancelar tareas, ver el estado | Página web, `/api/estado`, `/api/cancelar`, acciones `listar_tareas` y `cancelar_tarea` |
+| ESP32-S3, C++ en Arduino, Wi-Fi, LLM remoto | Todo el proyecto |
+| Sin frameworks de agentes | Solo `WiFi`, `HTTPClient`, `WebServer`, `Preferences` y `ArduinoJson` |
+| Catálogo explícito de funciones autorizadas | `ejecutarAccion()` en `plan.cpp` (6 acciones) |
+| Validar esquema, tipos, dispositivos y horarios; rechazar acciones desconocidas | `procesarPlan()` en `plan.cpp` |
+| NTP y zona horaria | `configTzTime()` en el `.ino`, zona en `config.h` |
+| Comportamiento sin Wi-Fi, con falla de API y tras reinicio | Tabla anterior y [docs/COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md) |
+| Proteger las credenciales | `credenciales.h` fuera de GitHub; nunca se muestran en la página |
+| Ambigüedad → aclaración | `esAmbigua()` + `"tipo": "aclaracion"` |
+| Condiciones evaluadas con los sensores, no con el LLM | `condicionCumplida()` en `plan.cpp` |
+| Informe de pruebas (ambigua/inválida y reinicio) | [docs/PRUEBAS.md](docs/PRUEBAS.md) |
 
 ## 📚 Documentación
 
 | Documento | Contenido |
 |-----------|-----------|
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Capas, diagramas, concurrencia, decisiones de diseño, cómo extender |
-| [API.md](docs/API.md) | Manual de la API REST (Request/Response JSON) |
-| [JSON_FORMAT.md](docs/JSON_FORMAT.md) | Contrato LLM ↔ firmware, reglas de validación |
-| [HARDWARE.md](docs/HARDWARE.md) | Materiales, pines, conexiones |
-| [SETUP.md](docs/SETUP.md) | Instalación, configuración, compilación, simulación |
-| [OPERACION_Y_FALLOS.md](docs/OPERACION_Y_FALLOS.md) | Sin Wi-Fi, falla de API, reinicio |
-| [TESTING.md](docs/TESTING.md) | Informe y protocolo de pruebas |
-| [SECURITY_NOTES.md](docs/SECURITY_NOTES.md) | Credenciales, TLS, el LLM como entrada no confiable |
-| [DEMO.md](docs/DEMO.md) | Guion del video de demostración |
-
-## 🤝 Contribuir
-
-Las contribuciones son bienvenidas: lea **[CONTRIBUTING.md](CONTRIBUTING.md)** y el
-[Código de conducta](CODE_OF_CONDUCT.md). Para vulnerabilidades, ver [SECURITY.md](SECURITY.md).
+| [COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md) | Explicación para principiantes, diagrama, fallos, qué hace cada archivo |
+| [CONEXIONES.md](docs/CONEXIONES.md) | Materiales, pines y cómo conectar |
+| [FORMATO_JSON.md](docs/FORMATO_JSON.md) | El JSON que usa el LLM y las reglas de validación |
+| [API.md](docs/API.md) | Manual de la API: cada petición y respuesta |
+| [PRUEBAS.md](docs/PRUEBAS.md) | Informe y lista de pruebas |
 
 ## 📄 Licencia
 
-[MIT](LICENSE) © 2026 Juan Nicolás Barreto Sánchez
+[MIT](LICENSE) — libre para usar, modificar y compartir. © 2026 Juan Nicolás Barreto Sánchez

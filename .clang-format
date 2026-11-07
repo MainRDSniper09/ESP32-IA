@@ -1,6 +1,0 @@
-# Estilo del firmware (basado en Google, líneas de 120 columnas)
-BasedOnStyle: Google
-ColumnLimit: 120
-IndentWidth: 2
-AllowShortFunctionsOnASingleLine: Inline
-SortIncludes: false

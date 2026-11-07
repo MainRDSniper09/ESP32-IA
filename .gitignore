@@ -1,34 +1,14 @@
-# ---------------------------------------------------------- Credenciales
-# NUNCA subir claves: copie agente_secrets.example.h como agente_secrets.h
-firmware/AgenteESP32/src/config/agente_secrets.h
-**/agente_secrets.h
-.env
-*.pem
-*.key
+# Claves privadas: NUNCA subir a GitHub
+credenciales.h
 
-# ---------------------------------------------------------- PlatformIO / IDE
-.pio/
-.pioenvs/
-.piolibdeps/
-.vscode/*
-!.vscode/extensions.json
-.idea/
-*.code-workspace
-
-# ---------------------------------------------------------- Compilación
+# Archivos de compilación
 build/
+.pio/
 *.bin
 *.elf
-*.map
-*.o
 
-# ---------------------------------------------------------- Python
-__pycache__/
-*.pyc
-.venv/
-venv/
-
-# ---------------------------------------------------------- Sistema
+# Sistema / editores
+.vscode/
+.idea/
 .DS_Store
 Thumbs.db
-desktop.ini

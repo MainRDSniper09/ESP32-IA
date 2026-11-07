@@ -1,0 +1,10 @@
+{
+  "tipo": "plan",
+  "mensaje": "Encender la luz de la bodega",
+  "acciones": [
+    {
+      "accion": "encender",
+      "dispositivo": "luz_bodega"
+    }
+  ]
+}
