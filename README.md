@@ -8,11 +8,13 @@ Un **ESP32-S3** recibe órdenes escritas en español, por ejemplo:
 
 Un **modelo de lenguaje (LLM)** en internet traduce la orden a un **JSON**, y el ESP32
 **revisa** ese JSON y lo **ejecuta**: enciende LED (luces y aspersores), vigila
-interruptores (puertas y ventanas), programa tareas para más tarde y avisa cuando algo
-pasa.
+interruptores (puertas y ventanas), programa tareas para más tarde y avisa cuando algo pasa.
 
 > 🔑 **Idea clave:** el LLM solo *interpreta* el texto. Quien *decide y actúa* es el ESP32,
 > que solo acepta acciones de una lista permitida y revisa los sensores reales.
+
+**Todo el programa está en un único archivo:** [`AgenteESP32/AgenteESP32.ino`](AgenteESP32/AgenteESP32.ino),
+listo para abrir en el Arduino IDE y comentado sección por sección.
 
 ---
 
@@ -20,10 +22,10 @@ pasa.
 
 1. [¿Qué puede hacer?](#-qué-puede-hacer)
 2. [¿Cómo funciona?](#-cómo-funciona)
-3. [Materiales y conexiones](#-materiales-y-conexiones)
+3. [Conexiones](#-conexiones)
 4. [Instalación paso a paso](#-instalación-paso-a-paso)
 5. [Cómo usarlo](#️-cómo-usarlo)
-6. [Archivos del proyecto](#-archivos-del-proyecto)
+6. [Organización del código](#-organización-del-código)
 7. [¿Qué pasa si algo falla?](#-qué-pasa-si-algo-falla)
 8. [Requisitos del taller](#-requisitos-del-taller)
 9. [Documentación](#-documentación)
@@ -76,9 +78,9 @@ esperar al LLM no detiene nada).
 
 ➡️ Explicación completa para principiantes: **[docs/COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md)**
 
-## 🔧 Materiales y conexiones
+## 🔌 Conexiones
 
-- 1 ESP32-S3 · 7 LED (4 luces, 2 aspersores, 1 alerta) con resistencias de 220 Ω · 5 interruptores · protoboard y cables.
+![Diagrama de conexiones](docs/diagrama_conexiones.svg)
 
 | Pin | Dispositivo | | Pin | Dispositivo |
 |:--:|---|---|:--:|---|
@@ -89,10 +91,14 @@ esperar al LLM no detiene nada).
 | 15 | 💧 Aspersor frontal | | 12 | 🪟 Ventana de la recepción |
 | 16 | 💧 Aspersor trasero | | 17 | 🔴 LED de alerta |
 
-- **LED:** `pin → resistencia 220 Ω → LED → GND`
-- **Interruptor:** `pin → interruptor → GND` · cerrado = puerta **cerrada**, abierto = puerta **abierta**
+- **Cada LED:** `pin → resistencia de 220 Ω → pata larga del LED · pata corta → GND`
+- **Cada interruptor:** `pin → interruptor → GND` (sin resistencia: se usa la interna del ESP32)
+  - interruptor **cerrado** = puerta **cerrada** · interruptor **abierto** = puerta **abierta**
 
-➡️ Diagramas y detalles: **[docs/CONEXIONES.md](docs/CONEXIONES.md)**
+**Materiales:** 1 ESP32-S3, 7 LED (4 amarillos, 2 azules, 1 rojo), 7 resistencias de 220 Ω,
+5 interruptores, protoboard, cables y un cable USB de datos.
+
+➡️ Más detalles: **[docs/CONEXIONES.md](docs/CONEXIONES.md)**
 
 ## 🚀 Instalación paso a paso
 
@@ -105,21 +111,19 @@ esperar al LLM no detiene nada).
 4. *Herramientas → Gestionar bibliotecas*: instala **ArduinoJson** (de Benoit Blanchon), versión 7.
 
 ### 2. Descargar el proyecto
-```bash
-git clone https://github.com/MainRDSniper09/ESP32-IA.git
-```
-O en GitHub: botón verde *Code → Download ZIP*.
+En GitHub: botón verde *Code → Download ZIP* (o `git clone https://github.com/MainRDSniper09/ESP32-IA.git`).
 
-### 3. Poner tus claves
-1. En la carpeta `AgenteESP32/`, copia `credenciales_ejemplo.h` y renómbralo a **`credenciales.h`**.
-2. Ábrelo y escribe tu red Wi-Fi y tu clave de la API de Claude
-   (se obtiene en [console.anthropic.com](https://console.anthropic.com)):
-   ```cpp
-   #define WIFI_NOMBRE  "MiRed"
-   #define WIFI_CLAVE   "MiClave"
-   #define LLM_API_KEY  "sk-ant-..."
-   ```
-   `credenciales.h` **no se sube a GitHub** (está en `.gitignore`).
+### 3. Poner tus claves (sin subirlas a GitHub)
+En la carpeta `AgenteESP32/` crea un archivo de texto llamado **`credenciales.h`** con:
+
+```cpp
+#define WIFI_NOMBRE  "MiRed"
+#define WIFI_CLAVE   "MiClave"
+#define LLM_API_KEY  "sk-ant-..."     // se obtiene en https://console.anthropic.com
+```
+
+El programa lo detecta solo. Ese archivo está en `.gitignore`, así que **nunca se sube a GitHub**.
+(Si no lo creas, el programa usa los valores de ejemplo de la sección 1 del código.)
 
 ### 4. Subir el programa
 1. Abre `AgenteESP32/AgenteESP32.ino` en el Arduino IDE.
@@ -141,13 +145,13 @@ O en GitHub: botón verde *Code → Download ZIP*.
 
 La página tiene cuatro partes:
 
-- **Escribe una orden:** el cuadro de texto, botones con ejemplos y la respuesta del sistema
-  (incluido el JSON que devolvió el LLM, para ver qué entendió).
+- **Escribe una orden:** cuadro de texto, botones con los ejemplos del taller y la respuesta
+  del sistema (incluido el JSON que devolvió el LLM, para ver qué entendió).
 - **Luces y aspersores:** estado de cada uno y botón para encender/apagar.
 - **Puertas y ventanas:** abierta o cerrada, en tiempo real.
 - **Tareas programadas** (con botón *Cancelar*) y **Avisos** (las alertas aparecen en rojo).
 
-También se puede usar sin la página, desde cualquier programa, con la **API**:
+También se puede usar desde cualquier programa con la **API**:
 
 ```bash
 curl -X POST http://192.168.1.60/api/orden -d "{\"texto\": \"Apaga todas las luces\"}"
@@ -155,29 +159,38 @@ curl -X POST http://192.168.1.60/api/plan -d @ejemplos/1_control_inmediato.json 
 curl http://192.168.1.60/api/estado
 ```
 
-➡️ Manual de la API (cada petición y respuesta JSON explicada): **[docs/API.md](docs/API.md)**
+➡️ Manual de la API (cada petición y respuesta JSON): **[docs/API.md](docs/API.md)**
 ➡️ Formato del JSON y reglas de validación: **[docs/FORMATO_JSON.md](docs/FORMATO_JSON.md)**
 
-## 📁 Archivos del proyecto
+## 📁 Organización del código
 
 ```
 ESP32-IA/
-├── AgenteESP32/                  ← el programa (se abre con Arduino IDE)
-│   ├── AgenteESP32.ino           inicio: Wi-Fi, monitoreo y servidor web
-│   ├── config.h                  pines, zona horaria, límites
-│   ├── credenciales_ejemplo.h    plantilla de claves (cópiala como credenciales.h)
-│   ├── dispositivos.h / .cpp     LED e interruptores
-│   ├── plan.h / .cpp             revisar y ejecutar el JSON (acciones permitidas)
-│   ├── tareas.h / .cpp           tareas programadas y memoria no volátil
-│   ├── avisos.h / .cpp           notificaciones y LED de alerta
-│   ├── llm.h / .cpp              conexión con Claude
-│   ├── servidor_web.h / .cpp     página web y API
-│   └── pagina_web.h              diseño de la página (HTML)
-├── docs/                         ← documentación
-├── ejemplos/                     ← planes JSON de prueba (válidos e inválidos)
+├── AgenteESP32/
+│   └── AgenteESP32.ino        ← TODO el programa (C++ para Arduino IDE)
+├── docs/                      ← documentación y diagrama de conexiones
+├── ejemplos/                  ← planes JSON de prueba (válidos e inválidos)
 ├── README.md
 └── LICENSE
 ```
+
+El archivo `.ino` está dividido en 13 secciones numeradas y comentadas:
+
+| # | Sección | Qué contiene |
+|:--:|---------|--------------|
+| 1 | Claves | Wi-Fi y API (o `credenciales.h`) |
+| 2 | Configuración y pines | Pines, zona horaria, red de respaldo, límites |
+| 3 | Librerías | WiFi, WebServer, HTTPClient, Preferences, ArduinoJson |
+| 4 | Dispositivos | Lista de luces/aspersores/puertas/ventanas, encender LED, leer interruptores |
+| 5 | Avisos | Notificaciones y LED rojo de alerta |
+| 6 | Tareas programadas | Guardar, cancelar, ejecutar a su hora, memoria no volátil |
+| 7 | Catálogo de acciones | Las 6 acciones permitidas y las condiciones |
+| 8 | Validación | Revisión del JSON del LLM y detección de órdenes ambiguas |
+| 9 | LLM | Petición HTTPS a la API de Claude con las instrucciones |
+| 10 | Página web | HTML, CSS y JavaScript de la interfaz |
+| 11 | Servidor web y API | Las 6 rutas de la API |
+| 12 | Monitoreo | Tarea que corre en el segundo núcleo |
+| 13 | Inicio | Wi-Fi, `setup()` y `loop()` |
 
 ## 🧯 ¿Qué pasa si algo falla?
 
@@ -192,32 +205,32 @@ ESP32-IA/
 
 ## ✅ Requisitos del taller
 
-| Requisito | Cómo se cumple |
-|-----------|----------------|
-| Interpretar intenciones, dispositivos, horarios, intervalos y condiciones | El LLM devuelve `accion`, `dispositivo`, `hora`, `minutos_despues`, `condicion` (`llm.cpp`) |
-| Encender/apagar luces y aspersores (salidas digitales) | `dispositivos.cpp` |
-| Consultar puertas y ventanas (entradas digitales) | `dispositivos.cpp`, acción `consultar_accesos` |
-| Órdenes inmediatas, a una hora y secuencias sin bloquear | `tareas.cpp` + tarea de monitoreo en el núcleo 1 |
-| Guardar tareas en memoria no volátil y recuperarlas | `tareas.cpp` (librería `Preferences`) |
-| Alertas visibles | Página web + LED rojo (`avisos.cpp`) |
-| Listar y cancelar tareas, ver el estado | Página web, `/api/estado`, `/api/cancelar`, acciones `listar_tareas` y `cancelar_tarea` |
-| ESP32-S3, C++ en Arduino, Wi-Fi, LLM remoto | Todo el proyecto |
-| Sin frameworks de agentes | Solo `WiFi`, `HTTPClient`, `WebServer`, `Preferences` y `ArduinoJson` |
-| Catálogo explícito de funciones autorizadas | `ejecutarAccion()` en `plan.cpp` (6 acciones) |
-| Validar esquema, tipos, dispositivos y horarios; rechazar acciones desconocidas | `procesarPlan()` en `plan.cpp` |
-| NTP y zona horaria | `configTzTime()` en el `.ino`, zona en `config.h` |
+| Requisito | Dónde está (sección del `.ino`) |
+|-----------|---------------------------------|
+| Interpretar intenciones, dispositivos, horarios, intervalos y condiciones | 9 — el LLM devuelve `accion`, `dispositivo`, `hora`, `minutos_despues`, `condicion` |
+| Encender/apagar luces y aspersores (salidas digitales) | 4 — `cambiarSalida()` |
+| Consultar puertas y ventanas (entradas digitales) | 4 — `revisarEntradas()`, acción `consultar_accesos` |
+| Órdenes inmediatas, a una hora y secuencias sin bloquear | 6 y 12 — `revisarTareas()` en el segundo núcleo, sin `delay()` |
+| Guardar tareas en memoria no volátil y recuperarlas | 6 — `guardarTareas()` / `cargarTareas()` (librería `Preferences`) |
+| Alertas visibles | 5 — página web + LED rojo |
+| Listar y cancelar tareas, ver el estado | 7 y 11 — `listar_tareas`, `cancelar_tarea`, `/api/estado`, `/api/cancelar` |
+| ESP32-S3, C++ en Arduino, Wi-Fi, LLM remoto | Todo el archivo |
+| Sin frameworks de agentes | 3 — solo librerías de conexión, JSON y memoria |
+| Catálogo explícito de funciones autorizadas | 7 — `ejecutarAccion()` (6 acciones) |
+| Validar esquema, tipos, dispositivos y horarios; rechazar acciones desconocidas | 8 — `procesarPlan()` |
+| NTP y zona horaria | 2 y 13 — `ZONA_HORARIA`, `configTzTime()` |
 | Comportamiento sin Wi-Fi, con falla de API y tras reinicio | Tabla anterior y [docs/COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md) |
-| Proteger las credenciales | `credenciales.h` fuera de GitHub; nunca se muestran en la página |
-| Ambigüedad → aclaración | `esAmbigua()` + `"tipo": "aclaracion"` |
-| Condiciones evaluadas con los sensores, no con el LLM | `condicionCumplida()` en `plan.cpp` |
+| Proteger las credenciales | 1 — `credenciales.h` fuera de GitHub; nunca se muestran en la página |
+| Ambigüedad → aclaración | 8 — `esAmbigua()` y `"tipo": "aclaracion"` |
+| Condiciones evaluadas con los sensores, no con el LLM | 7 — `condicionCumplida()` |
 | Informe de pruebas (ambigua/inválida y reinicio) | [docs/PRUEBAS.md](docs/PRUEBAS.md) |
 
 ## 📚 Documentación
 
 | Documento | Contenido |
 |-----------|-----------|
-| [COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md) | Explicación para principiantes, diagrama, fallos, qué hace cada archivo |
-| [CONEXIONES.md](docs/CONEXIONES.md) | Materiales, pines y cómo conectar |
+| [COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md) | Explicación para principiantes, fallos, secciones del código |
+| [CONEXIONES.md](docs/CONEXIONES.md) | Materiales, pines, diagrama y cómo conectar |
 | [FORMATO_JSON.md](docs/FORMATO_JSON.md) | El JSON que usa el LLM y las reglas de validación |
 | [API.md](docs/API.md) | Manual de la API: cada petición y respuesta |
 | [PRUEBAS.md](docs/PRUEBAS.md) | Informe y lista de pruebas |

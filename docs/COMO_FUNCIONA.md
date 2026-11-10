@@ -47,7 +47,7 @@ Ejemplo con la orden **«A las 8:00 p. m. enciende la luz de la entrada»**:
 ## 3. La idea más importante: el LLM interpreta, el ESP32 decide
 
 El LLM **nunca** controla los pines directamente. Solo puede elegir entre 6 acciones
-permitidas (el *catálogo de funciones autorizadas*, en `plan.cpp`):
+permitidas (el *catálogo de funciones autorizadas*, sección 7 del código):
 
 | Acción | Qué hace |
 |--------|----------|
@@ -73,7 +73,7 @@ no apaga las luces y explica por qué.
 ### Las órdenes ambiguas se preguntan
 
 «Enciende los aspersores **más tarde**» no dice a qué hora. El ESP32 detecta esas
-palabras (`esAmbigua()` en `plan.cpp`) y **pregunta** antes de guardar nada:
+palabras (`esAmbigua()`, sección 8 del código) y **pregunta** antes de guardar nada:
 *«¿A qué hora o en cuántos minutos?»*. Además, el LLM tiene instrucciones de hacer lo
 mismo (`"tipo": "aclaracion"`). Cuando el usuario responde, la página envía la orden
 original junto con la respuesta.
@@ -85,8 +85,8 @@ vigilar las puertas. Para evitarlo, el ESP32-S3 aprovecha sus **dos núcleos**:
 
 | Núcleo | Qué hace | Archivo |
 |--------|----------|---------|
-| Núcleo 1 — `tareaMonitoreo` | Cada 50 ms lee los interruptores; cada segundo revisa si alguna tarea ya debe ejecutarse | `AgenteESP32.ino` |
-| `loop()` | Atiende la página web y espera al LLM | `AgenteESP32.ino`, `servidor_web.cpp` |
+| Núcleo 1 — `tareaMonitoreo` | Cada 50 ms lee los interruptores; cada segundo revisa si alguna tarea ya debe ejecutarse | `AgenteESP32.ino` (sección 12) |
+| `loop()` | Atiende la página web y espera al LLM | `AgenteESP32.ino` (secciones 11 y 13) |
 
 Ninguno usa `delay()` largos para esperar las tareas: se compara la hora actual con la
 hora de cada tarea (como mirar el reloj de vez en cuando, en vez de quedarse dormido).
@@ -98,7 +98,7 @@ unos microsegundos.
 ## 5. La hora (NTP)
 
 El ESP32 no tiene reloj con pila. Al conectarse a internet pide la hora a un servidor
-**NTP** (`pool.ntp.org`) y la ajusta a la zona horaria de `config.h` (Colombia, UTC-5,
+**NTP** (`pool.ntp.org`) y la ajusta a la zona horaria definida en la sección 2 del código (Colombia, UTC-5,
 por defecto). Mientras no tenga la hora, **no acepta órdenes con horario** (no sabría
 cuándo ejecutarlas), pero sí órdenes inmediatas.
 
@@ -128,24 +128,32 @@ cuándo ejecutarlas), pero sí órdenes inmediatas.
   **no se ejecuta tarde**: se avisa con una alerta. Así no se encienden los aspersores a
   las 3 a. m. porque la luz volvió tarde.
 
-## 7. ¿Qué hace cada archivo?
+## 7. Las secciones del código
 
-| Archivo | En palabras simples |
-|---------|---------------------|
-| `AgenteESP32.ino` | El inicio: conecta el Wi-Fi, arranca el monitoreo y el servidor web |
-| `config.h` | Ajustes: pines, zona horaria, nombre de la red de respaldo |
-| `credenciales.h` | Tus claves (no se sube a GitHub) |
-| `dispositivos.cpp` | La lista de luces, aspersores, puertas y ventanas, y cómo leerlos/encenderlos |
-| `plan.cpp` | Revisa el JSON del LLM y ejecuta las acciones permitidas |
-| `tareas.cpp` | Guarda las tareas programadas y las ejecuta a su hora |
-| `avisos.cpp` | Lista de notificaciones y LED rojo de alerta |
-| `llm.cpp` | Habla con la API de Claude por internet |
-| `servidor_web.cpp` | Atiende la página web y la API |
-| `pagina_web.h` | El diseño de la página (HTML) |
+Todo el programa está en **un solo archivo**, `AgenteESP32/AgenteESP32.ino`, dividido en
+13 secciones numeradas con comentarios:
+
+| Sección | En palabras simples |
+|:--:|---------------------|
+| 1 | Claves de Wi-Fi y de la API |
+| 2 | Ajustes: pines, zona horaria, red de respaldo, límites |
+| 3 | Librerías que se usan |
+| 4 | La lista de luces, aspersores, puertas y ventanas, y cómo leerlos/encenderlos |
+| 5 | Avisos y LED rojo de alerta |
+| 6 | Tareas programadas y memoria que no se borra al apagar |
+| 7 | Catálogo: las 6 acciones permitidas y las condiciones |
+| 8 | Revisión (validación) del JSON del LLM y detección de órdenes ambiguas |
+| 9 | Conexión con la API de Claude |
+| 10 | La página web (HTML) |
+| 11 | Servidor web y API |
+| 12 | Tarea de monitoreo (el segundo núcleo) |
+| 13 | Wi-Fi, `setup()` y `loop()` |
 
 ## 8. Seguridad de las claves
 
-- Las claves van en `credenciales.h`, que está en `.gitignore`: **nunca** se sube a GitHub.
+- Las claves se escriben en un archivo aparte, `credenciales.h`, que está en `.gitignore`:
+  **nunca** se sube a GitHub (ver la sección 1 del código). Si no existe, el programa usa
+  valores de ejemplo vacíos.
 - La página web y la API **no muestran** las claves en ningún momento.
 - La conexión con el LLM va cifrada (HTTPS). Por simplicidad no se verifica el
   certificado del servidor (`setInsecure()`); en un producto real se debería verificar.

@@ -1,7 +1,7 @@
 # Formato JSON de las instrucciones
 
 Es el "idioma" que comparten el LLM y el ESP32. El LLM traduce el español a este JSON;
-el ESP32 lo revisa (`plan.cpp`) y, si está bien, lo ejecuta.
+el ESP32 lo revisa (`procesarPlan()`, sección 8 de `AgenteESP32.ino`) y, si está bien, lo ejecuta.
 
 El mismo formato se puede enviar directamente a `POST /api/plan` sin usar el LLM
 (útil para probar). Hay ejemplos listos en la carpeta [`ejemplos/`](../ejemplos).
