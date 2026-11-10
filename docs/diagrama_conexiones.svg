@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 690" font-family="Arial, sans-serif" font-size="14">
+  <rect width="960" height="690" fill="#ffffff"/>
+  <text x="480" y="32" text-anchor="middle" font-size="20" font-weight="bold" fill="#1f2933">Diagrama de conexiones — Agente ESP32-S3</text>
+
+  <!-- Placa ESP32-S3 -->
+  <rect x="360" y="60" width="200" height="560" rx="12" fill="#1f3b57" stroke="#0f2233" stroke-width="2"/>
+  <text x="460" y="95" text-anchor="middle" fill="#ffffff" font-size="18" font-weight="bold">ESP32-S3</text>
+  <text x="460" y="115" text-anchor="middle" fill="#c9d6e3" font-size="12">DevKitC-1</text>
+
+  <!-- ============ SALIDAS (derecha): GPIO -> resistencia 220 ohm -> LED -> GND ============ -->
+  <text x="720" y="66" text-anchor="middle" font-weight="bold" fill="#1f2933">SALIDAS: LED (luces y aspersores)</text>
+  <line x1="900" y1="120" x2="900" y2="640" stroke="#000" stroke-width="3"/>
+  <text x="900" y="112" text-anchor="middle" font-weight="bold">GND</text>
+
+  <g stroke-width="2">
+    <g transform="translate(0,140)">
+      <text x="550" y="5" text-anchor="end" fill="#fff">GPIO 4</text>
+      <line x1="560" y1="0" x2="640" y2="0" stroke="#333"/>
+      <rect x="640" y="-8" width="50" height="16" fill="#e9d8a6" stroke="#333"/><text x="665" y="-12" text-anchor="middle" font-size="11">220 Ω</text>
+      <line x1="690" y1="0" x2="760" y2="0" stroke="#333"/>
+      <polygon points="760,-12 760,12 784,0" fill="#ffd400" stroke="#333"/><line x1="786" y1="-12" x2="786" y2="12" stroke="#333"/>
+      <line x1="786" y1="0" x2="900" y2="0" stroke="#333"/>
+      <text x="800" y="-8" font-size="12">Luz de la entrada</text>
+    </g>
+    <g transform="translate(0,205)">
+      <text x="550" y="5" text-anchor="end" fill="#fff">GPIO 5</text>
+      <line x1="560" y1="0" x2="640" y2="0" stroke="#333"/>
+      <rect x="640" y="-8" width="50" height="16" fill="#e9d8a6" stroke="#333"/><text x="665" y="-12" text-anchor="middle" font-size="11">220 Ω</text>
+      <line x1="690" y1="0" x2="760" y2="0" stroke="#333"/>
+      <polygon points="760,-12 760,12 784,0" fill="#ffd400" stroke="#333"/><line x1="786" y1="-12" x2="786" y2="12" stroke="#333"/>
+      <line x1="786" y1="0" x2="900" y2="0" stroke="#333"/>
+      <text x="800" y="-8" font-size="12">Luz de la oficina</text>
+    </g>
+    <g transform="translate(0,270)">
+      <text x="550" y="5" text-anchor="end" fill="#fff">GPIO 6</text>
+      <line x1="560" y1="0" x2="640" y2="0" stroke="#333"/>
+      <rect x="640" y="-8" width="50" height="16" fill="#e9d8a6" stroke="#333"/><text x="665" y="-12" text-anchor="middle" font-size="11">220 Ω</text>
+      <line x1="690" y1="0" x2="760" y2="0" stroke="#333"/>
+      <polygon points="760,-12 760,12 784,0" fill="#ffd400" stroke="#333"/><line x1="786" y1="-12" x2="786" y2="12" stroke="#333"/>
+      <line x1="786" y1="0" x2="900" y2="0" stroke="#333"/>
+      <text x="800" y="-8" font-size="12">Luz del parqueadero</text>
+    </g>
+    <g transform="translate(0,335)">
+      <text x="550" y="5" text-anchor="end" fill="#fff">GPIO 7</text>
+      <line x1="560" y1="0" x2="640" y2="0" stroke="#333"/>
+      <rect x="640" y="-8" width="50" height="16" fill="#e9d8a6" stroke="#333"/><text x="665" y="-12" text-anchor="middle" font-size="11">220 Ω</text>
+      <line x1="690" y1="0" x2="760" y2="0" stroke="#333"/>
+      <polygon points="760,-12 760,12 784,0" fill="#ffd400" stroke="#333"/><line x1="786" y1="-12" x2="786" y2="12" stroke="#333"/>
+      <line x1="786" y1="0" x2="900" y2="0" stroke="#333"/>
+      <text x="800" y="-8" font-size="12">Luz de la bodega</text>
+    </g>
+    <g transform="translate(0,400)">
+      <text x="550" y="5" text-anchor="end" fill="#fff">GPIO 15</text>
+      <line x1="560" y1="0" x2="640" y2="0" stroke="#333"/>
+      <rect x="640" y="-8" width="50" height="16" fill="#e9d8a6" stroke="#333"/><text x="665" y="-12" text-anchor="middle" font-size="11">220 Ω</text>
+      <line x1="690" y1="0" x2="760" y2="0" stroke="#333"/>
+      <polygon points="760,-12 760,12 784,0" fill="#3b82f6" stroke="#333"/><line x1="786" y1="-12" x2="786" y2="12" stroke="#333"/>
+      <line x1="786" y1="0" x2="900" y2="0" stroke="#333"/>
+      <text x="800" y="-8" font-size="12">Aspersor frontal</text>
+    </g>
+    <g transform="translate(0,465)">
+      <text x="550" y="5" text-anchor="end" fill="#fff">GPIO 16</text>
+      <line x1="560" y1="0" x2="640" y2="0" stroke="#333"/>
+      <rect x="640" y="-8" width="50" height="16" fill="#e9d8a6" stroke="#333"/><text x="665" y="-12" text-anchor="middle" font-size="11">220 Ω</text>
+      <line x1="690" y1="0" x2="760" y2="0" stroke="#333"/>
+      <polygon points="760,-12 760,12 784,0" fill="#3b82f6" stroke="#333"/><line x1="786" y1="-12" x2="786" y2="12" stroke="#333"/>
+      <line x1="786" y1="0" x2="900" y2="0" stroke="#333"/>
+      <text x="800" y="-8" font-size="12">Aspersor trasero</text>
+    </g>
+    <g transform="translate(0,530)">
+      <text x="550" y="5" text-anchor="end" fill="#fff">GPIO 17</text>
+      <line x1="560" y1="0" x2="640" y2="0" stroke="#333"/>
+      <rect x="640" y="-8" width="50" height="16" fill="#e9d8a6" stroke="#333"/><text x="665" y="-12" text-anchor="middle" font-size="11">220 Ω</text>
+      <line x1="690" y1="0" x2="760" y2="0" stroke="#333"/>
+      <polygon points="760,-12 760,12 784,0" fill="#ef4444" stroke="#333"/><line x1="786" y1="-12" x2="786" y2="12" stroke="#333"/>
+      <line x1="786" y1="0" x2="900" y2="0" stroke="#333"/>
+      <text x="800" y="-8" font-size="12">LED de ALERTA</text>
+    </g>
+  </g>
+
+  <!-- ============ ENTRADAS (izquierda): GPIO -> interruptor -> GND ============ -->
+  <text x="190" y="66" text-anchor="middle" font-weight="bold" fill="#1f2933">ENTRADAS: interruptores</text>
+  <text x="190" y="84" text-anchor="middle" font-size="12" fill="#52606d">(puertas y ventanas)</text>
+  <line x1="40" y1="120" x2="40" y2="640" stroke="#000" stroke-width="3"/>
+  <text x="40" y="112" text-anchor="middle" font-weight="bold">GND</text>
+
+  <g stroke-width="2">
+    <g transform="translate(0,160)">
+      <text x="370" y="5" fill="#fff">GPIO 8</text>
+      <line x1="360" y1="0" x2="250" y2="0" stroke="#333"/>
+      <circle cx="245" cy="0" r="4" fill="#333"/><line x1="245" y1="0" x2="170" y2="-18" stroke="#333"/><circle cx="165" cy="0" r="4" fill="#333"/>
+      <line x1="165" y1="0" x2="40" y2="0" stroke="#333"/>
+      <text x="205" y="22" text-anchor="middle" font-size="12">Puerta principal</text>
+    </g>
+    <g transform="translate(0,250)">
+      <text x="370" y="5" fill="#fff">GPIO 9</text>
+      <line x1="360" y1="0" x2="250" y2="0" stroke="#333"/>
+      <circle cx="245" cy="0" r="4" fill="#333"/><line x1="245" y1="0" x2="170" y2="-18" stroke="#333"/><circle cx="165" cy="0" r="4" fill="#333"/>
+      <line x1="165" y1="0" x2="40" y2="0" stroke="#333"/>
+      <text x="205" y="22" text-anchor="middle" font-size="12">Puerta de la bodega</text>
+    </g>
+    <g transform="translate(0,340)">
+      <text x="370" y="5" fill="#fff">GPIO 10</text>
+      <line x1="360" y1="0" x2="250" y2="0" stroke="#333"/>
+      <circle cx="245" cy="0" r="4" fill="#333"/><line x1="245" y1="0" x2="170" y2="-18" stroke="#333"/><circle cx="165" cy="0" r="4" fill="#333"/>
+      <line x1="165" y1="0" x2="40" y2="0" stroke="#333"/>
+      <text x="205" y="22" text-anchor="middle" font-size="12">Puerta de la oficina</text>
+    </g>
+    <g transform="translate(0,430)">
+      <text x="370" y="5" fill="#fff">GPIO 11</text>
+      <line x1="360" y1="0" x2="250" y2="0" stroke="#333"/>
+      <circle cx="245" cy="0" r="4" fill="#333"/><line x1="245" y1="0" x2="170" y2="-18" stroke="#333"/><circle cx="165" cy="0" r="4" fill="#333"/>
+      <line x1="165" y1="0" x2="40" y2="0" stroke="#333"/>
+      <text x="205" y="22" text-anchor="middle" font-size="12">Ventana de la oficina</text>
+    </g>
+    <g transform="translate(0,520)">
+      <text x="370" y="5" fill="#fff">GPIO 12</text>
+      <line x1="360" y1="0" x2="250" y2="0" stroke="#333"/>
+      <circle cx="245" cy="0" r="4" fill="#333"/><line x1="245" y1="0" x2="170" y2="-18" stroke="#333"/><circle cx="165" cy="0" r="4" fill="#333"/>
+      <line x1="165" y1="0" x2="40" y2="0" stroke="#333"/>
+      <text x="205" y="22" text-anchor="middle" font-size="12">Ventana de la recepción</text>
+    </g>
+  </g>
+
+  <!-- GND de la placa unido a ambos rieles -->
+  <text x="460" y="605" text-anchor="middle" fill="#fff" font-weight="bold">GND</text>
+  <line x1="460" y1="620" x2="460" y2="640" stroke="#000" stroke-width="3"/>
+  <line x1="40" y1="640" x2="900" y2="640" stroke="#000" stroke-width="3"/>
+
+  <!-- Leyenda -->
+  <rect x="40" y="655" width="880" height="26" fill="#f4f6f8" stroke="#d0d7de"/>
+  <text x="52" y="673" font-size="12" fill="#1f2933">LED: pata larga (ánodo) hacia la resistencia, pata corta (cátodo) a GND · Interruptor cerrado = CERRADA, abierto = ABIERTA (usa la resistencia interna)</text>
+</svg>

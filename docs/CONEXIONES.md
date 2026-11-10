@@ -33,7 +33,7 @@ ventanas. No se conecta nada a 110/220 V.
 | 12 | Ventana de la recepción (`ventana_recepcion`) | Entrada (interruptor) |
 | 17 | LED de alerta | Salida (LED rojo) |
 
-Los pines se cambian en `AgenteESP32/config.h`. Se evitaron los pines que el ESP32-S3 usa
+Los pines se cambian en la sección 2 de `AgenteESP32/AgenteESP32.ino`. Se evitaron los pines que el ESP32-S3 usa
 al arrancar (0, 3, 45, 46), los del USB (19, 20) y los de la memoria (26 a 37).
 
 ## Cómo conectar un LED (salidas)
@@ -66,6 +66,10 @@ Con un interruptor deslizante de 3 patas: la pata del **centro** al GPIO y una d
 **extremas** a GND.
 
 ## Diagrama general
+
+![Diagrama de conexiones](diagrama_conexiones.svg)
+
+Versión en texto:
 
 ```
                     ESP32-S3

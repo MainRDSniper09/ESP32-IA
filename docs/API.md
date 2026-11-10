@@ -2,7 +2,7 @@
 
 La página web se comunica con el ESP32 mediante una pequeña **API**: direcciones a las
 que se envían **peticiones (Request)** y que devuelven **respuestas (Response)** en JSON.
-Cualquier programa (navegador, `curl`, Python, Postman) puede usarla igual.
+Cualquier programa (navegador, `curl`, Postman) puede usarla igual.
 
 - **Dirección base:** `http://<IP-del-ESP32>` (la IP aparece en el Monitor Serie).
   Sin Wi-Fi: `http://192.168.4.1`.
@@ -184,20 +184,3 @@ Marca las alertas como revisadas: el LED rojo deja de parpadear. Sin cuerpo.
 
 **Response 200:** `{"ok": true}`
 
----
-
-## Ejemplo en Python
-
-```python
-import json, urllib.request
-
-ESP = "http://192.168.1.60"
-
-def enviar(ruta, datos):
-    peticion = urllib.request.Request(ESP + ruta, data=json.dumps(datos).encode(), method="POST")
-    with urllib.request.urlopen(peticion) as r:
-        return json.load(r)
-
-respuesta = enviar("/api/orden", {"texto": "¿Qué puertas están abiertas?"})
-print(respuesta["resultados"])
-```
