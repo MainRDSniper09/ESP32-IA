@@ -10,7 +10,7 @@ ni de inteligencia artificial.
 | **ESP32-S3** | Una pequeña computadora (microcontrolador) con Wi-Fi | Es el "cerebro" que controla todo |
 | **LED** | Lucecitas | Representan las **luces** y los **aspersores** de la empresa |
 | **Interruptores** | Botones que se quedan en una posición | Representan **puertas** y **ventanas** (abierta / cerrada) |
-| **LLM** (Claude) | Un modelo de lenguaje en internet, como ChatGPT | **Entiende** las órdenes escritas en español |
+| **LLM** (Gemini o Claude) | Un modelo de lenguaje en internet, como ChatGPT | **Entiende** las órdenes escritas en español |
 | **Página web** | La interfaz que se abre en el navegador | Donde el usuario escribe las órdenes y ve el estado |
 
 ## 2. El recorrido de una orden
@@ -143,7 +143,7 @@ Todo el programa está en **un solo archivo**, `AgenteESP32/AgenteESP32.ino`, di
 | 6 | Tareas programadas y memoria que no se borra al apagar |
 | 7 | Catálogo: las 6 acciones permitidas y las condiciones |
 | 8 | Revisión (validación) del JSON del LLM y detección de órdenes ambiguas |
-| 9 | Conexión con la API de Claude |
+| 9 | Conexión con la API del LLM (Gemini o Claude) |
 | 10 | La página web (HTML) |
 | 11 | Servidor web y API |
 | 12 | Tarea de monitoreo (el segundo núcleo) |

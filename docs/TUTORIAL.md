@@ -14,7 +14,7 @@ los LED escribiendo órdenes en español en la página web. No necesitas experie
 2. [Conectar la ESP32 al computador](#2-conectar-la-esp32-al-computador)
 3. [Prueba rápida: encender un LED](#3-prueba-rápida-encender-un-led)
 4. [Armar el circuito completo](#4-armar-el-circuito-completo)
-5. [Conseguir la clave de la API de Claude](#5-conseguir-la-clave-de-la-api-de-claude)
+5. [Conseguir la clave de la API (gratis con Gemini)](#5-conseguir-la-clave-de-la-api-gratis-con-gemini)
 6. [Descargar el proyecto y poner tus claves](#6-descargar-el-proyecto-y-poner-tus-claves)
 7. [Subir el programa a la ESP32](#7-subir-el-programa-a-la-esp32)
 8. [Leer el Monitor Serie](#8-leer-el-monitor-serie)
@@ -42,9 +42,7 @@ los LED escribiendo órdenes en español en la página web. No necesitas experie
 
 - Un computador con Windows, macOS o Linux.
 - Una red **Wi-Fi de 2,4 GHz** con internet (la ESP32 no se conecta a redes de 5 GHz).
-- Una cuenta en [console.anthropic.com](https://console.anthropic.com) con saldo para la API.
-  - Es distinta de la suscripción de claude.ai.
-  - Cada orden cuesta una fracción de centavo de dólar.
+- Una **cuenta de Google**, para la clave gratuita de la API de Gemini (no pide tarjeta).
 
 ---
 
@@ -170,13 +168,30 @@ Si al final del montaje alguna puerta aparece siempre abierta, revisa su cable a
 
 ---
 
-## 5. Conseguir la clave de la API de Claude
+## 5. Conseguir la clave de la API (gratis con Gemini)
 
-1. Entra a <https://console.anthropic.com> e inicia sesión.
-2. En **Billing** agrega saldo. Unos pocos dólares alcanzan para todo el proyecto.
-3. En **API Keys** pulsa **Create Key**, ponle un nombre (por ejemplo `esp32`) y copia la clave.
-   Empieza por `sk-ant-...`. Solo se muestra una vez: guárdala.
-4. **No compartas la clave ni la subas a GitHub.** Quien la tenga puede gastar tu saldo.
+El programa usa por defecto **Gemini de Google**, que tiene un nivel **gratuito**:
+
+1. Entra a <https://aistudio.google.com/apikey> e inicia sesión con tu cuenta de Google.
+2. Acepta los términos si te los pide y pulsa **Create API key**.
+3. Copia la clave. Empieza por `AIza...`.
+4. **No compartas la clave ni la subas a GitHub.**
+
+Sobre el nivel gratuito:
+- Tiene un **límite de peticiones por minuto y por día**. Para probar el proyecto sobra; si lo
+  superas, la página mostrará un error `HTTP 429` y basta con esperar un poco.
+- Google puede usar lo que envíes en el nivel gratuito para mejorar sus productos.
+  No escribas datos personales o privados en las órdenes.
+
+<details>
+<summary>¿Prefieres usar Claude (de pago)?</summary>
+
+1. Crea una clave en <https://console.anthropic.com> → **API Keys** (empieza por `sk-ant-...`)
+   y agrega saldo en **Billing**.
+2. En la **sección 2** del programa cambia `#define PROVEEDOR_LLM  1` por `#define PROVEEDOR_LLM  2`.
+3. Pon esa clave en `LLM_API_KEY`.
+
+</details>
 
 ---
 
@@ -196,7 +211,7 @@ Si al final del montaje alguna puerta aparece siempre abierta, revisa su cable a
      ```cpp
      #define WIFI_NOMBRE  "NombreDeTuRed"
      #define WIFI_CLAVE   "ClaveDeTuRed"
-     #define LLM_API_KEY  "sk-ant-pega-aqui-tu-clave"
+     #define LLM_API_KEY  "AIza-pega-aqui-tu-clave"
      ```
    - Guarda con **Ctrl + S**.
 
@@ -256,7 +271,7 @@ Sin Wi-Fi. Conéctate a la red 'Agente-ESP32' y abre http://192.168.4.1
 
 Revisa el nombre y la clave en `credenciales.h`, y que la red sea de 2,4 GHz. Mientras tanto,
 puedes conectarte a la red **Agente-ESP32** (clave `agente1234`) y abrir `http://192.168.4.1`.
-Allí funciona todo excepto las órdenes escritas, porque sin internet no hay Claude.
+Allí funciona todo excepto las órdenes escritas, porque sin internet no hay LLM.
 
 ---
 
@@ -285,7 +300,7 @@ Antes de empezar:
 - Pon todos los interruptores en **cerrado**.
 - Apaga todos los LED.
 
-### Prueba 1 — Botones (sin Claude)
+### Prueba 1 — Botones (sin LLM)
 1. En *Luces y aspersores* pulsa **Encender** en *Luz de la entrada*.
 2. ✅ El LED del GPIO 4 se enciende y la página dice **ENCENDIDO**.
 3. Pulsa **Apagar** para dejarlo como estaba.
@@ -297,9 +312,9 @@ Antes de empezar:
 
 ### Prueba 3 — Tu primera orden en español
 1. Escribe en el cuadro: `Enciende la luz de la oficina` y pulsa **Enviar orden**.
-2. Durante unos segundos verás *"Pensando..."*: la ESP32 está consultando a Claude.
+2. Durante unos segundos verás *"Pensando..."*: la ESP32 está consultando al LLM.
 3. ✅ La respuesta dice `✅ plan`, *"Luz de la oficina: encendido"* y el LED del GPIO 5 se enciende.
-4. Al final de la respuesta aparece **"JSON que devolvió el LLM"**. Así entendió Claude tu orden:
+4. Al final de la respuesta aparece **"JSON que devolvió el LLM"**. Así entendió el LLM tu orden:
    ```json
    {"tipo":"plan","mensaje":"Encender la luz de la oficina",
     "acciones":[{"accion":"encender","dispositivo":"luz_oficina"}]}
@@ -314,7 +329,7 @@ Escribe: `Apaga todas las luces`
 1. Abre el interruptor de la puerta principal.
 2. Pulsa el ejemplo **"¿Qué puertas o ventanas están abiertas?..."** y luego **Enviar orden**.
 3. ✅ La respuesta dice *"Abiertas: Puerta principal..."* y lista las tareas.
-   La información sale de los interruptores reales, no de lo que Claude imagina.
+   La información sale de los interruptores reales, no de lo que el LLM imagina.
 
 ### Prueba 6 — Tarea programada (escenario 1)
 Usa una hora **2 minutos en el futuro**. Si son las 17:58, escribe 18:00.
@@ -375,10 +390,10 @@ En los ejemplos, cambia `192.168.1.60` por la IP de tu ESP32.
 # Ver el estado de todo
 Invoke-RestMethod http://192.168.1.60/api/estado
 
-# Enviar una orden en lenguaje natural (consulta a Claude)
+# Enviar una orden en lenguaje natural (consulta al LLM)
 Invoke-RestMethod -Method Post -Uri http://192.168.1.60/api/orden -Body '{"texto": "Enciende la luz de la bodega"}'
 
-# Enviar un plan JSON directo (SIN Claude): útil para probar la validación
+# Enviar un plan JSON directo (SIN LLM): útil para probar la validación
 Invoke-RestMethod -Method Post -Uri http://192.168.1.60/api/plan -Body (Get-Content -Raw ejemplos\1_control_inmediato.json)
 
 # Probar un JSON inválido: debe responder con error 422 y no ejecutar nada
@@ -425,7 +440,7 @@ curl -X POST http://192.168.1.60/api/plan -d @ejemplos/invalido_accion_desconoci
 | Se queda en `Conectando a Wi-Fi.....` y pasa a modo respaldo | Revisa nombre/clave (distingue mayúsculas); la red debe ser de **2,4 GHz** |
 | La página no abre | El celular/PC debe estar en la **misma red**. En redes de universidad los equipos a veces no se ven entre sí: usa el punto de acceso de tu celular para ambos |
 | `HTTP 401` en la respuesta | La clave de la API está mal copiada |
-| `HTTP 400` con mensaje de saldo/crédito | Falta saldo en console.anthropic.com |
+| `HTTP 429` (Gemini) | Superaste el límite gratuito por minuto o por día: espera un momento |
 | *"El reloj aún no está sincronizado"* | Espera unos segundos tras encender; se necesita internet para obtener la hora |
 | Un LED no enciende | Está al revés (la pata larga va hacia la resistencia) o falta su conexión a GND |
 | Una puerta aparece siempre ABIERTA | Su interruptor no llega a GND o está en la posición abierta |

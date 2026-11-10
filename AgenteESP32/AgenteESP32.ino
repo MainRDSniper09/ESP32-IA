@@ -1,14 +1,14 @@
 /*
  * =============================================================================
  *   AGENTE INTELIGENTE DE AUTOMATIZACIÓN Y SUPERVISIÓN EMPRESARIAL
- *   ESP32-S3  ·  C++ (Arduino IDE)  ·  LLM remoto (Claude)
+ *   ESP32-S3  ·  C++ (Arduino IDE)  ·  LLM remoto (Gemini gratis o Claude)
  * =============================================================================
  *
  *  ¿QUÉ HACE?
  *  ----------
  *  1. El usuario escribe una orden en español en una página web que muestra
  *     el propio ESP32. Ej: "A las 8 p. m. enciende la luz de la entrada".
- *  2. El ESP32 envía la orden al LLM (Claude) por internet.
+ *  2. El ESP32 envía la orden al LLM (Gemini o Claude) por internet.
  *  3. El LLM responde con un PLAN en formato JSON.
  *  4. El ESP32 REVISA ese JSON (acciones permitidas, dispositivos que existen,
  *     horas válidas...). Si algo está mal, no hace NADA.
@@ -76,7 +76,7 @@
 //
 //      #define WIFI_NOMBRE  "MiRed"
 //      #define WIFI_CLAVE   "MiClave"
-//      #define LLM_API_KEY  "sk-ant-..."
+//      #define LLM_API_KEY  "AIza..."     (clave de Gemini, o "sk-ant-..." de Claude)
 //
 //  Si ese archivo no existe, se usan los valores de abajo.
 // =============================================================================
@@ -85,7 +85,7 @@
 #else
   #define WIFI_NOMBRE  "NombreDeTuRed"
   #define WIFI_CLAVE   "ClaveDeTuRed"
-  #define LLM_API_KEY  ""          // clave de https://console.anthropic.com
+  #define LLM_API_KEY  ""          // clave de la API (ver sección 2: qué proveedor usar)
 #endif
 
 
@@ -102,8 +102,18 @@
 #define RED_RESPALDO    "Agente-ESP32"
 #define CLAVE_RESPALDO  "agente1234"    // mínimo 8 caracteres
 
-// Modelo de lenguaje que interpreta las órdenes
-#define MODELO_LLM  "claude-opus-5-5"
+// ¿Qué modelo de lenguaje (LLM) interpreta las órdenes?
+//   1 = Gemini de Google  -> GRATIS. Clave en https://aistudio.google.com/apikey (empieza por "AIza")
+//   2 = Claude de Anthropic -> de pago. Clave en https://console.anthropic.com (empieza por "sk-ant-")
+#define PROVEEDOR_LLM  1
+
+#if PROVEEDOR_LLM == 1
+  #define MODELO_LLM  "gemini-3.8-flash"
+  #define URL_LLM     "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+#else
+  #define MODELO_LLM  "claude-opus-5-5"
+  #define URL_LLM     "https://api.anthropic.com/v1/messages"
+#endif
 
 // Pines de las salidas (LED)
 #define PIN_LUZ_ENTRADA       4
@@ -791,7 +801,7 @@ bool esAmbigua(const String& textoOriginal) {
 
 
 // =============================================================================
-// 9. CONSULTAR AL LLM (API de Claude)
+// 9. CONSULTAR AL LLM (Gemini o Claude, según PROVEEDOR_LLM de la sección 2)
 // -----------------------------------------------------------------------------
 //  Petición HTTPS normal con HTTPClient. Se le envían unas INSTRUCCIONES
 //  (qué formato devolver y qué dispositivos existen) y la orden del usuario.
@@ -856,17 +866,32 @@ bool consultarLLM(const String& orden, String& planJson, String& error) {
     return false;
   }
   String hora = horaSincronizada() ? formatearMomento(time(nullptr)) : String("desconocida");
+  String mensajeUsuario = "Fecha y hora actual (día/mes hora): " + hora + "\nOrden: " + orden;
 
-  // ---- 9.1 Armar la petición (formato de la API Messages de Claude)
+  // ---- 9.1 Armar la petición
+  //  Los dos proveedores piden lo mismo (instrucciones + orden), pero cada uno
+  //  con su propio formato de JSON.
   JsonDocument peticion;
   peticion["model"] = MODELO_LLM;
+#if PROVEEDOR_LLM == 1
+  // Formato "chat completions" (Gemini): las instrucciones van como mensaje "system"
+  JsonArray mensajes = peticion["messages"].to<JsonArray>();
+  JsonObject sistema = mensajes.add<JsonObject>();
+  sistema["role"] = "system";
+  sistema["content"] = crearInstrucciones();
+  JsonObject usuario = mensajes.add<JsonObject>();
+  usuario["role"] = "user";
+  usuario["content"] = mensajeUsuario;
+#else
+  // Formato "Messages" (Claude): las instrucciones van en el campo "system"
   peticion["max_tokens"] = 4096;
   peticion["system"] = crearInstrucciones();
   peticion["output_config"]["effort"] = "low";   // respuesta rápida: la tarea es sencilla
   peticion["fallbacks"] = "default";             // si el modelo rechaza la orden, el servidor reintenta con otro
-  JsonObject msg = peticion["messages"].to<JsonArray>().add<JsonObject>();
-  msg["role"] = "user";
-  msg["content"] = "Fecha y hora actual (día/mes hora): " + hora + "\nOrden: " + orden;
+  JsonObject usuario = peticion["messages"].to<JsonArray>().add<JsonObject>();
+  usuario["role"] = "user";
+  usuario["content"] = mensajeUsuario;
+#endif
   String cuerpo;
   serializeJson(peticion, cuerpo);
 
@@ -874,12 +899,16 @@ bool consultarLLM(const String& orden, String& planJson, String& error) {
   WiFiClientSecure cliente;
   cliente.setInsecure();   // conexión cifrada sin verificar el certificado (simplificación del prototipo)
   HTTPClient http;
-  http.begin(cliente, "https://api.anthropic.com/v1/messages");
+  http.begin(cliente, URL_LLM);
   http.setTimeout(30000);
   http.addHeader("Content-Type", "application/json");
+#if PROVEEDOR_LLM == 1
+  http.addHeader("Authorization", String("Bearer ") + LLM_API_KEY);
+#else
   http.addHeader("x-api-key", LLM_API_KEY);
   http.addHeader("anthropic-version", "2026-10-21");
   http.addHeader("anthropic-beta", "server-side-fallback-2026-07-01");
+#endif
 
   Serial.println("[llm] Consultando al modelo...");
   int codigo = http.POST(cuerpo);
@@ -898,20 +927,27 @@ bool consultarLLM(const String& orden, String& planJson, String& error) {
     return false;
   }
   if (codigo != 200) {
-    error = "La API respondió con error HTTP " + String(codigo) + ": " + (respuesta["error"]["message"] | "");
+    // El mensaje de error puede venir como {"error":{...}} o como [{"error":{...}}]
+    String detalle = respuesta["error"]["message"] | (respuesta[0]["error"]["message"] | "");
+    error = "La API respondió con error HTTP " + String(codigo) + ": " + detalle;
     return false;
   }
+
+  String salida = "";
+#if PROVEEDOR_LLM == 1
+  // Gemini: el texto viene en choices[0].message.content
+  salida = respuesta["choices"][0]["message"]["content"] | "";
+#else
+  // Claude: primero revisar si el modelo se negó; el texto viene en bloques "text"
   String motivo = respuesta["stop_reason"] | "";
   if (motivo == "refusal") {
     error = "El modelo no quiso procesar esa orden";
     return false;
   }
-
-  // El texto del modelo viene en los bloques de tipo "text"
-  String salida = "";
   for (JsonObject bloque : respuesta["content"].as<JsonArray>()) {
     if (bloque["type"] == "text") salida += bloque["text"].as<const char*>();
   }
+#endif
 
   // Quedarse solo con lo que está entre la primera "{" y la última "}"
   int inicio = salida.indexOf('{');
