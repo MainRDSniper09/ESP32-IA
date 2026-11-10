@@ -102,6 +102,9 @@ esperar al LLM no detiene nada).
 
 ## 🚀 Instalación paso a paso
 
+> 📘 ¿Primera vez? Sigue el **[tutorial completo](docs/TUTORIAL.md)**: desde conectar la ESP32
+> hasta probar cada función en la página web.
+
 ### 1. Preparar el Arduino IDE
 1. Instala el [Arduino IDE 2](https://www.arduino.cc/en/software).
 2. *Archivo → Preferencias → URLs adicionales de gestor de placas*, pega:
@@ -229,6 +232,7 @@ El archivo `.ino` está dividido en 13 secciones numeradas y comentadas:
 
 | Documento | Contenido |
 |-----------|-----------|
+| [TUTORIAL.md](docs/TUTORIAL.md) | **Tutorial paso a paso:** conectar la ESP32, subir el código, abrir la página y probar todo |
 | [COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md) | Explicación para principiantes, fallos, secciones del código |
 | [CONEXIONES.md](docs/CONEXIONES.md) | Materiales, pines, diagrama y cómo conectar |
 | [FORMATO_JSON.md](docs/FORMATO_JSON.md) | El JSON que usa el LLM y las reglas de validación |
