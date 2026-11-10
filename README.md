@@ -52,7 +52,7 @@ listo para abrir en el Arduino IDE y comentado sección por sección.
 flowchart LR
     A([👤 Usuario]) -->|escribe una orden| B[Página web]
     B --> C[ESP32-S3]
-    C -->|orden + instrucciones| D[(LLM Claude<br/>en internet)]
+    C -->|orden + instrucciones| D[(LLM Gemini o Claude<br/>en internet)]
     D -->|JSON| C
     C --> E{¿JSON válido?}
     E -->|no| F[❌ Se rechaza]
@@ -63,7 +63,7 @@ flowchart LR
 ```
 
 1. Escribes la orden en la página web que muestra el propio ESP32.
-2. El ESP32 la envía al LLM (Claude) por internet.
+2. El ESP32 la envía al LLM por internet: **Gemini** de Google (gratis, por defecto) o **Claude** de Anthropic.
 3. El LLM responde con un JSON como este:
    ```json
    {"tipo": "plan", "mensaje": "Encender luz de entrada a las 20:00",
@@ -122,7 +122,7 @@ En la carpeta `AgenteESP32/` crea un archivo de texto llamado **`credenciales.h`
 ```cpp
 #define WIFI_NOMBRE  "MiRed"
 #define WIFI_CLAVE   "MiClave"
-#define LLM_API_KEY  "sk-ant-..."     // se obtiene en https://console.anthropic.com
+#define LLM_API_KEY  "AIza..."       // Gemini (gratis): https://aistudio.google.com/apikey
 ```
 
 El programa lo detecta solo. Ese archivo está en `.gitignore`, así que **nunca se sube a GitHub**.
@@ -189,7 +189,7 @@ El archivo `.ino` está dividido en 13 secciones numeradas y comentadas:
 | 6 | Tareas programadas | Guardar, cancelar, ejecutar a su hora, memoria no volátil |
 | 7 | Catálogo de acciones | Las 6 acciones permitidas y las condiciones |
 | 8 | Validación | Revisión del JSON del LLM y detección de órdenes ambiguas |
-| 9 | LLM | Petición HTTPS a la API de Claude con las instrucciones |
+| 9 | LLM | Petición HTTPS a Gemini o Claude con las instrucciones |
 | 10 | Página web | HTML, CSS y JavaScript de la interfaz |
 | 11 | Servidor web y API | Las 6 rutas de la API |
 | 12 | Monitoreo | Tarea que corre en el segundo núcleo |
