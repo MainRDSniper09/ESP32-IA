@@ -1,243 +1,184 @@
-# 🏢 Agente ESP32-S3: automatización de una empresa con lenguaje natural
+# 🎙️ Asistente de voz con ESP32-S3 — Luces de una empresa
 
-Proyecto final de **Inteligencia Artificial y Sistemas Embebidos**.
+Proyecto final de **Inteligencia Artificial y Sistemas Embebidos** · **Parte 1**
 
-Un **ESP32-S3** recibe órdenes escritas en español, por ejemplo:
+Un asistente de voz que controla las luces de una empresa de **un solo piso**. Cada
+habitación tiene su luz, representada por un **LED**. Le dices:
 
-> «A las 8:00 p. m. enciende la luz de la entrada y los aspersores; avísame si alguna puerta está abierta.»
+> 🗣️ «Apaga la luz de la cocina»
 
-Un **modelo de lenguaje (LLM)** en internet traduce la orden a un **JSON**, y el ESP32
-**revisa** ese JSON y lo **ejecuta**: enciende LED (luces y aspersores), vigila
-interruptores (puertas y ventanas), programa tareas para más tarde y avisa cuando algo pasa.
+…y la ESP32 **interpreta la frase ella misma** (sin internet ni inteligencia artificial
+externa). Calcula **qué porcentaje se parece** cada palabra que escuchó a las palabras que
+conoce, decide qué quisiste decir y **apaga el LED de la cocina**. Un LED verde confirma que
+entendió.
 
-> 🔑 **Idea clave:** el LLM solo *interpreta* el texto. Quien *decide y actúa* es el ESP32,
-> que solo acepta acciones de una lista permitida y revisa los sensores reales.
+```
+ "apaga la luz de la cosina"   (el reconocimiento de voz se equivocó en una letra)
 
-**Todo el programa está en un único archivo:** [`AgenteESP32/AgenteESP32.ino`](AgenteESP32/AgenteESP32.ino),
-listo para abrir en el Arduino IDE y comentado sección por sección.
+  ENCENDER       ####......  43%
+  APAGAR         ##########  100%  apaga ~ apaga        ← acción elegida
+  Recepción      ##........  29%
+  Oficina        ####......  43%
+  Cocina         ########..  83%  cosina ~ cocina      ← lugar elegido (supera el 70 %)
+  ...
+  OK  Listo: apagué la luz de: Cocina   (confianza 91 %)
+```
 
 ---
 
 ## 📋 Contenido
 
-1. [¿Qué puede hacer?](#-qué-puede-hacer)
+1. [¿Qué hace?](#-qué-hace)
 2. [¿Cómo funciona?](#-cómo-funciona)
 3. [Conexiones](#-conexiones)
-4. [Instalación paso a paso](#-instalación-paso-a-paso)
+4. [Puesta en marcha rápida](#-puesta-en-marcha-rápida)
 5. [Cómo usarlo](#️-cómo-usarlo)
 6. [Organización del código](#-organización-del-código)
-7. [¿Qué pasa si algo falla?](#-qué-pasa-si-algo-falla)
-8. [Requisitos del taller](#-requisitos-del-taller)
-9. [Documentación](#-documentación)
+7. [Documentación](#-documentación)
 
 ---
 
-## ✨ ¿Qué puede hacer?
+## ✨ ¿Qué hace?
 
-| Función | Ejemplo |
-|---------|---------|
-| 💡 Encender/apagar al instante | «Enciende la luz de la bodega» |
-| ⏰ Programar a una hora | «A las 8:00 p. m. enciende los aspersores» |
-| 🔁 Secuencias | «Enciende la oficina a las 6 p. m. y, quince minutos después, el parqueadero» |
-| 🚪 Consultar puertas/ventanas | «¿Qué puertas o ventanas están abiertas?» |
-| 🔀 Órdenes con condición | «Si todas las puertas están cerradas, apaga las luces» |
-| 🔔 Alertas | «Avísame si alguna puerta está abierta» → aviso en la página + LED rojo |
-| 📝 Ver y cancelar tareas | «¿Qué tareas quedaron programadas?» / botón *Cancelar* |
-| ❓ Pedir aclaración | «Enciende los aspersores más tarde» → *¿A qué hora?* |
-| 💾 Recordar tras reinicio | Las tareas se guardan en memoria y se recuperan al reiniciar |
+| Lo que dices | Lo que hace |
+|--------------|-------------|
+| «Apaga la luz de la cocina» | Apaga **un** LED |
+| «Enciende la oficina y la recepción» | Enciende **varios** LED |
+| «Prende todas las luces» / «Apaga las luces» | Enciende o apaga **todos** |
+| «Apaga la **cosina**» / «**Ensiende** el despacho» | Entiende aunque haya errores de reconocimiento |
+| «Desactiva el almacén» | Entiende **sinónimos** (almacén = bodega) |
+| «Enciende la luz» | Pregunta **dónde** (LED rojo) |
+| «Hola, ¿cómo estás?» | Dice que **no entendió** (LED rojo) |
+
+Además muestra, para cada orden, la **tabla de porcentajes** de parecido entre las palabras
+dichas y las conocidas, tanto en la página web como en el Monitor Serie.
 
 ## 🧠 ¿Cómo funciona?
 
 ```mermaid
 flowchart LR
-    A([👤 Usuario]) -->|escribe una orden| B[Página web]
-    B --> C[ESP32-S3]
-    C -->|orden + instrucciones| D[(LLM Gemini o Claude<br/>en internet)]
-    D -->|JSON| C
-    C --> E{¿JSON válido?}
-    E -->|no| F[❌ Se rechaza]
-    E -->|sí, ahora| G[💡 Ejecuta]
-    E -->|sí, más tarde| H[⏰ Guarda la tarea]
-    H -->|llega la hora| G
-    I[🚪 Interruptores] --> G
+    A([🗣️ Voz]) -->|micrófono del celular/PC| B[Navegador:<br/>voz → texto]
+    B -->|"apaga la luz de la cocina"| C[ESP32-S3]
+    K([⌨️ Monitor Serie]) --> C
+    C --> D[1. Limpiar texto<br/>apaga · cocina]
+    D --> E[2. Comparar cada palabra<br/>con el vocabulario<br/>→ % de parecido]
+    E --> F{3. ¿Supera el 70 %?}
+    F -->|sí| G[💡 Cambiar LED<br/>+ LED verde]
+    F -->|no| H[❓ Pedir más datos<br/>+ LED rojo]
 ```
 
-1. Escribes la orden en la página web que muestra el propio ESP32.
-2. El ESP32 la envía al LLM por internet: **Gemini** de Google (gratis, por defecto) o **Claude** de Anthropic.
-3. El LLM responde con un JSON como este:
-   ```json
-   {"tipo": "plan", "mensaje": "Encender luz de entrada a las 20:00",
-    "acciones": [{"accion": "encender", "dispositivo": "luz_entrada", "hora": "20:00"}]}
-   ```
-4. El ESP32 lo **revisa**: ¿la acción está permitida?, ¿el dispositivo existe?, ¿la hora es válida?
-   Si algo está mal, **no hace nada**.
-5. Si está bien, lo ejecuta ya o lo guarda para la hora indicada.
+1. **Voz a texto:** lo hace el navegador (Google Chrome) con su micrófono. La ESP32 recibe el texto.
+2. **Limpieza:** minúsculas, sin tildes ni signos; se quitan palabras sin significado ("la", "de", "luz"...).
+3. **Porcentaje de parecido:** cada palabra se compara con el **vocabulario** del asistente
+   usando la **distancia de Levenshtein** (cuántas letras hay que cambiar). Por ejemplo,
+   «cosina» → «cocina» es 1 cambio de 6 letras = **83 %** de parecido.
+4. **Decisión:**
+   - **Qué hacer:** la acción (encender/apagar) con mayor porcentaje.
+   - **Dónde:** las habitaciones que superen el **70 %**, o todas.
+5. **Acción:** cambia los LED y parpadea el verde (entendió) o el rojo (no entendió).
 
-Mientras tanto, el ESP32 vigila las puertas todo el tiempo (usa sus dos núcleos, así que
-esperar al LLM no detiene nada).
-
-➡️ Explicación completa para principiantes: **[docs/COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md)**
+➡️ Explicación completa, con ejemplos y cómo "entrenarlo" con palabras nuevas: **[docs/COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md)**
 
 ## 🔌 Conexiones
 
 ![Diagrama de conexiones](docs/diagrama_conexiones.svg)
 
-| Pin | Dispositivo | | Pin | Dispositivo |
-|:--:|---|---|:--:|---|
-| 4 | 💡 Luz de la entrada | | 8 | 🚪 Puerta principal |
-| 5 | 💡 Luz de la oficina | | 9 | 🚪 Puerta de la bodega |
-| 6 | 💡 Luz del parqueadero | | 10 | 🚪 Puerta de la oficina |
-| 7 | 💡 Luz de la bodega | | 11 | 🪟 Ventana de la oficina |
-| 15 | 💧 Aspersor frontal | | 12 | 🪟 Ventana de la recepción |
-| 16 | 💧 Aspersor trasero | | 17 | 🔴 LED de alerta |
+| GPIO | LED | Representa |
+|:--:|-----|------------|
+| 4 | 🟡 amarillo | Recepción |
+| 5 | 🟡 amarillo | Oficina |
+| 6 | 🟡 amarillo | Sala de juntas |
+| 7 | 🟡 amarillo | Cocina |
+| 15 | 🟡 amarillo | Baño |
+| 16 | 🟡 amarillo | Bodega |
+| 17 | 🟢 verde | Orden entendida |
+| 18 | 🔴 rojo | No entendí |
 
-- **Cada LED:** `pin → resistencia de 220 Ω → pata larga del LED · pata corta → GND`
-- **Cada interruptor:** `pin → interruptor → GND` (sin resistencia: se usa la interna del ESP32)
-  - interruptor **cerrado** = puerta **cerrada** · interruptor **abierto** = puerta **abierta**
+Cada LED: `GPIO → resistencia de 220 Ω → pata larga del LED · pata corta → GND`
 
-**Materiales:** 1 ESP32-S3, 7 LED (4 amarillos, 2 azules, 1 rojo), 7 resistencias de 220 Ω,
-5 interruptores, protoboard, cables y un cable USB de datos.
+**Materiales:** 1 ESP32-S3 · 6 LED amarillos · 1 verde · 1 rojo · 8 resistencias de 220 Ω ·
+protoboard · cables · cable USB de datos.
 
-➡️ Más detalles: **[docs/CONEXIONES.md](docs/CONEXIONES.md)**
+➡️ Detalles: **[docs/CONEXIONES.md](docs/CONEXIONES.md)**
 
-## 🚀 Instalación paso a paso
+## 🚀 Puesta en marcha rápida
 
-> 📘 ¿Primera vez? Sigue el **[tutorial completo](docs/TUTORIAL.md)**: desde conectar la ESP32
-> hasta probar cada función en la página web.
+> 📘 ¿Primera vez? Sigue el **[tutorial paso a paso](docs/TUTORIAL.md)**.
 
-### 1. Preparar el Arduino IDE
-1. Instala el [Arduino IDE 2](https://www.arduino.cc/en/software).
-2. *Archivo → Preferencias → URLs adicionales de gestor de placas*, pega:
-   `https://espressif.github.io/arduino-esp32/package_esp32_index.json`
-3. *Herramientas → Placa → Gestor de placas*: instala **esp32** (de Espressif Systems).
-   Versión probada: **2.0.17**.
-4. *Herramientas → Gestionar bibliotecas*: instala **ArduinoJson** (de Benoit Blanchon), versión 7.
-
-### 2. Descargar el proyecto
-En GitHub: botón verde *Code → Download ZIP* (o `git clone https://github.com/MainRDSniper09/ESP32-IA.git`).
-
-### 3. Poner tus claves (sin subirlas a GitHub)
-En la carpeta `AgenteESP32/` crea un archivo de texto llamado **`credenciales.h`** con:
-
-```cpp
-#define WIFI_NOMBRE  "MiRed"
-#define WIFI_CLAVE   "MiClave"
-#define LLM_API_KEY  "AIza..."       // Gemini (gratis): https://aistudio.google.com/apikey
-```
-
-El programa lo detecta solo. Ese archivo está en `.gitignore`, así que **nunca se sube a GitHub**.
-(Si no lo creas, el programa usa los valores de ejemplo de la sección 1 del código.)
-
-### 4. Subir el programa
-1. Abre `AgenteESP32/AgenteESP32.ino` en el Arduino IDE.
-2. *Herramientas → Placa*: **ESP32S3 Dev Module**. Elige el puerto COM.
-3. Pulsa **Subir** (→).
-4. Abre el **Monitor Serie** a **115200** baudios. Verás algo como:
+1. **Arduino IDE 2** → instala la placa **esp32** (Espressif, versión 2.0.17) y la librería **ArduinoJson** (v7).
+2. Abre `AgenteESP32/AgenteESP32.ino`.
+3. Crea en esa carpeta un archivo **`credenciales.h`** con tu Wi-Fi (no se sube a GitHub):
+   ```cpp
+   #define WIFI_NOMBRE  "MiRed"
+   #define WIFI_CLAVE   "MiClave"
    ```
-   === Agente ESP32-S3 ===
-   Conectando a Wi-Fi.....
-   Conectado. Abre en el navegador: http://192.168.1.60
-   [aviso] Hora sincronizada por internet: 06/11 17:58
-   ```
-5. Abre esa dirección en el navegador (desde la misma red Wi-Fi).
+4. Placa **ESP32S3 Dev Module**, tu puerto COM → **Subir**.
+5. Abre el **Monitor Serie (115200)** y copia la dirección que aparece, por ejemplo `http://192.168.1.60`.
+6. Ábrela en **Google Chrome** (en la misma red Wi-Fi), pulsa 🎤 y habla.
 
-> Si el ESP32 no encuentra tu red, crea la suya: conéctate a **Agente-ESP32**
-> (clave `agente1234`) y abre **http://192.168.4.1**.
+**No necesitas ninguna clave de API ni pagar nada:** toda la interpretación ocurre dentro de la ESP32.
 
 ## 🖥️ Cómo usarlo
 
-La página tiene cuatro partes:
+Tienes tres formas de darle órdenes. Las tres pasan por el **mismo intérprete**:
 
-- **Escribe una orden:** cuadro de texto, botones con los ejemplos del taller y la respuesta
-  del sistema (incluido el JSON que devolvió el LLM, para ver qué entendió).
-- **Luces y aspersores:** estado de cada uno y botón para encender/apagar.
-- **Puertas y ventanas:** abierta o cerrada, en tiempo real.
-- **Tareas programadas** (con botón *Cancelar*) y **Avisos** (las alertas aparecen en rojo).
+| Forma | Cómo |
+|-------|------|
+| 🎤 **Voz** | En la página, pulsa el micrófono y habla (Google Chrome) |
+| ⌨️ **Texto en la página** | Escribe la orden y pulsa *Enviar*, o toca una habitación del plano |
+| 🔌 **Monitor Serie** | Escribe la orden en el Arduino IDE y pulsa Enter (no necesita Wi-Fi) |
 
-También se puede usar desde cualquier programa con la **API**:
+La página muestra un **plano de la empresa** (las habitaciones se iluminan cuando su LED está
+encendido) y la **tabla de porcentajes** de la última orden.
+
+También se puede usar desde otros programas con la **API**:
 
 ```bash
-curl -X POST http://192.168.1.60/api/orden -d "{\"texto\": \"Apaga todas las luces\"}"
-curl -X POST http://192.168.1.60/api/plan -d @ejemplos/1_control_inmediato.json   # sin LLM
-curl http://192.168.1.60/api/estado
+curl -X POST http://192.168.1.60/api/comando -d "{\"texto\": \"apaga la luz de la cocina\"}"
 ```
 
-➡️ Manual de la API (cada petición y respuesta JSON): **[docs/API.md](docs/API.md)**
-➡️ Formato del JSON y reglas de validación: **[docs/FORMATO_JSON.md](docs/FORMATO_JSON.md)**
+➡️ Manual de la API: **[docs/API.md](docs/API.md)**
 
 ## 📁 Organización del código
 
 ```
 ESP32-IA/
 ├── AgenteESP32/
-│   └── AgenteESP32.ino        ← TODO el programa (C++ para Arduino IDE)
-├── docs/                      ← documentación y diagrama de conexiones
-├── ejemplos/                  ← planes JSON de prueba (válidos e inválidos)
+│   └── AgenteESP32.ino      ← TODO el programa (C++ para Arduino IDE)
+├── docs/                    ← documentación y diagrama
 ├── README.md
 └── LICENSE
 ```
 
-El archivo `.ino` está dividido en 13 secciones numeradas y comentadas:
+`AgenteESP32.ino` está dividido en 10 secciones comentadas:
 
 | # | Sección | Qué contiene |
 |:--:|---------|--------------|
-| 1 | Claves | Wi-Fi y API (o `credenciales.h`) |
-| 2 | Configuración y pines | Pines, zona horaria, red de respaldo, límites |
-| 3 | Librerías | WiFi, WebServer, HTTPClient, Preferences, ArduinoJson |
-| 4 | Dispositivos | Lista de luces/aspersores/puertas/ventanas, encender LED, leer interruptores |
-| 5 | Avisos | Notificaciones y LED rojo de alerta |
-| 6 | Tareas programadas | Guardar, cancelar, ejecutar a su hora, memoria no volátil |
-| 7 | Catálogo de acciones | Las 6 acciones permitidas y las condiciones |
-| 8 | Validación | Revisión del JSON del LLM y detección de órdenes ambiguas |
-| 9 | LLM | Petición HTTPS a Gemini o Claude con las instrucciones |
-| 10 | Página web | HTML, CSS y JavaScript de la interfaz |
-| 11 | Servidor web y API | Las 6 rutas de la API |
-| 12 | Monitoreo | Tarea que corre en el segundo núcleo |
-| 13 | Inicio | Wi-Fi, `setup()` y `loop()` |
-
-## 🧯 ¿Qué pasa si algo falla?
-
-| Situación | Qué hace el sistema |
-|-----------|---------------------|
-| **No hay Wi-Fi** | Crea su propia red (*Agente-ESP32*). La página, los botones, el monitoreo y las tareas siguen funcionando. Las órdenes escritas no (sin internet no hay LLM). |
-| **Falla el LLM** | Muestra el error, genera una alerta y **no ejecuta nada**. Todo lo demás sigue igual. |
-| **Se reinicia o se va la luz** | Arranca con todo apagado, **recupera las tareas** guardadas y las ejecuta a su hora. Si una tarea se pasó por más de 10 minutos, no la ejecuta tarde y avisa. |
-| **Todavía no tiene la hora** | Acepta órdenes inmediatas, pero no programadas, hasta sincronizar la hora por internet. |
-| **Orden ambigua** | Pregunta antes de guardar nada. |
-| **JSON incorrecto** | Rechaza la orden completa y explica el error. |
-
-## ✅ Requisitos del taller
-
-| Requisito | Dónde está (sección del `.ino`) |
-|-----------|---------------------------------|
-| Interpretar intenciones, dispositivos, horarios, intervalos y condiciones | 9 — el LLM devuelve `accion`, `dispositivo`, `hora`, `minutos_despues`, `condicion` |
-| Encender/apagar luces y aspersores (salidas digitales) | 4 — `cambiarSalida()` |
-| Consultar puertas y ventanas (entradas digitales) | 4 — `revisarEntradas()`, acción `consultar_accesos` |
-| Órdenes inmediatas, a una hora y secuencias sin bloquear | 6 y 12 — `revisarTareas()` en el segundo núcleo, sin `delay()` |
-| Guardar tareas en memoria no volátil y recuperarlas | 6 — `guardarTareas()` / `cargarTareas()` (librería `Preferences`) |
-| Alertas visibles | 5 — página web + LED rojo |
-| Listar y cancelar tareas, ver el estado | 7 y 11 — `listar_tareas`, `cancelar_tarea`, `/api/estado`, `/api/cancelar` |
-| ESP32-S3, C++ en Arduino, Wi-Fi, LLM remoto | Todo el archivo |
-| Sin frameworks de agentes | 3 — solo librerías de conexión, JSON y memoria |
-| Catálogo explícito de funciones autorizadas | 7 — `ejecutarAccion()` (6 acciones) |
-| Validar esquema, tipos, dispositivos y horarios; rechazar acciones desconocidas | 8 — `procesarPlan()` |
-| NTP y zona horaria | 2 y 13 — `ZONA_HORARIA`, `configTzTime()` |
-| Comportamiento sin Wi-Fi, con falla de API y tras reinicio | Tabla anterior y [docs/COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md) |
-| Proteger las credenciales | 1 — `credenciales.h` fuera de GitHub; nunca se muestran en la página |
-| Ambigüedad → aclaración | 8 — `esAmbigua()` y `"tipo": "aclaracion"` |
-| Condiciones evaluadas con los sensores, no con el LLM | 7 — `condicionCumplida()` |
-| Informe de pruebas (ambigua/inválida y reinicio) | [docs/PRUEBAS.md](docs/PRUEBAS.md) |
+| 1 | Wi-Fi | Nombre y clave de la red (o `credenciales.h`) y red de respaldo |
+| 2 | Habitaciones y pines | Tabla con cada habitación, su pin y sus nombres |
+| 3 | Vocabulario | Palabras para encender, apagar, "todas" y palabras ignoradas; umbral del 70 % |
+| 4 | Herramientas de texto | Normalizar, separar palabras, **distancia de Levenshtein**, % de parecido |
+| 5 | El intérprete | De texto a decisión: porcentajes, acción, lugares y confianza |
+| 6 | Ejecutar la decisión | Encender/apagar LED y parpadeo verde/rojo |
+| 7 | Monitor Serie | Recibir órdenes escritas y mostrar la tabla de porcentajes |
+| 8 | Página web | HTML, CSS y JavaScript (micrófono, plano, tabla) |
+| 9 | Servidor web y API | Rutas `/`, `/api/estado`, `/api/comando` |
+| 10 | `setup()` y `loop()` | Arranque y ciclo principal |
 
 ## 📚 Documentación
 
 | Documento | Contenido |
 |-----------|-----------|
-| [TUTORIAL.md](docs/TUTORIAL.md) | **Tutorial paso a paso:** conectar la ESP32, subir el código, abrir la página y probar todo |
-| [COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md) | Explicación para principiantes, fallos, secciones del código |
-| [CONEXIONES.md](docs/CONEXIONES.md) | Materiales, pines, diagrama y cómo conectar |
-| [FORMATO_JSON.md](docs/FORMATO_JSON.md) | El JSON que usa el LLM y las reglas de validación |
-| [API.md](docs/API.md) | Manual de la API: cada petición y respuesta |
-| [PRUEBAS.md](docs/PRUEBAS.md) | Informe y lista de pruebas |
+| [TUTORIAL.md](docs/TUTORIAL.md) | Paso a paso: instalar, conectar, subir, abrir la página, activar el micrófono y probar |
+| [COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md) | El intérprete explicado: limpieza, Levenshtein, porcentajes, decisión, cómo enseñarle palabras |
+| [CONEXIONES.md](docs/CONEXIONES.md) | Materiales, pines y cómo conectar los LED |
+| [API.md](docs/API.md) | Peticiones y respuestas JSON de la API |
+| [PRUEBAS.md](docs/PRUEBAS.md) | Lista de pruebas con los porcentajes esperados |
+
+## 🗺️ Próximas partes
+
+Esta es la **parte 1**: interpretar la orden y controlar los LED. El proyecto se irá
+ampliando por partes.
 
 ## 📄 Licencia
 

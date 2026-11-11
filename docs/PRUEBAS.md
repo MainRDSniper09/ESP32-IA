@@ -1,90 +1,73 @@
-# Informe de pruebas
+# Pruebas del asistente
 
-Pruebas para demostrar que el sistema cumple los criterios de aceptación del taller.
-Se hacen con el prototipo armado ([CONEXIONES.md](CONEXIONES.md)) y la página web abierta.
+Lista de pruebas para comprobar que el asistente interpreta bien las órdenes y controla
+los LED. Las columnas **«Esperado»** son los porcentajes que produce el intérprete del
+código (secciones 2 a 5), calculados con estas mismas frases.
 
-> Completa la columna **Resultado** al ejecutar cada prueba (✅ / ❌ y lo observado).
-> Para no esperar hasta las 8 p. m., usa una hora 2 o 3 minutos en el futuro.
+> Escribe cada frase en el **Monitor Serie** o en la página web (así el resultado no depende
+> del reconocimiento de voz). Después repite algunas **hablando** con el micrófono y anota qué
+> texto captó Chrome. Completa la columna **Resultado** (✅ / ❌ y lo observado).
 
-**Antes de empezar:** todas las puertas/ventanas cerradas, todas las luces apagadas, sin tareas,
-y la hora sincronizada (arriba en la página debe aparecer la hora, no «sin sincronizar»).
+**Antes de empezar:** escribe `prende todas las luces` para dejar todo encendido.
 
-## 1. Control inmediato
+## 1. Órdenes claras
 
-| # | Qué hacer | Resultado esperado | Resultado |
-|---|-----------|--------------------|-----------|
-| 1.1 | Pulsar *Encender* en «Luz de la entrada» | El LED del pin 4 enciende y la página dice ENCENDIDO | |
-| 1.2 | Orden: «Enciende la luz de la bodega» | Respuesta ✅ `plan`, resultado «Luz de la bodega: encendido», LED del pin 7 enciende | |
-| 1.3 | Orden: «Apaga todas las luces» | Se apagan los 4 LED de luces | |
+| # | Orden | Esperado | Resultado |
+|---|-------|----------|-----------|
+| 1.1 | `Apaga la luz de la cocina` | Apagar 100 %, Cocina 100 % → se apaga GPIO 7 · verde · confianza 100 % | |
+| 1.2 | `Enciende la oficina y la recepción` | Encender 100 %, Oficina 100 %, Recepción 100 % → encienden GPIO 4 y 5 | |
+| 1.3 | `oye asistente, prende la sala de juntas por favor` | Encender 100 %, Sala de juntas 100 % → GPIO 6 | |
+| 1.4 | `enciende la luz del baño` | Encender 100 %, Baño 100 % → GPIO 15 | |
 
-## 2. Consulta de accesos
+## 2. Todas a la vez
 
-| # | Qué hacer | Resultado esperado | Resultado |
-|---|-----------|--------------------|-----------|
-| 2.1 | Abrir el interruptor de la puerta de la bodega | En menos de 1 s aparece ABIERTA y el aviso «Puerta de la bodega se abrió» | |
-| 2.2 | Orden: «¿Qué puertas o ventanas están abiertas? ¿Qué tareas quedaron programadas?» | Lista exactamente las abiertas reales y dice las tareas | |
+| # | Orden | Esperado | Resultado |
+|---|-------|----------|-----------|
+| 2.1 | `prende todas las luces` | Encender 100 %, Todas 100 % → 6 LED encendidos | |
+| 2.2 | `apaga las luces` | Apagar 100 %, sin lugar pero dijo «luces» → 6 LED apagados | |
 
-## 3. Tarea horaria (escenario 1)
+## 3. Errores del reconocimiento de voz (palabras parecidas)
 
-| # | Qué hacer | Resultado esperado | Resultado |
-|---|-----------|--------------------|-----------|
-| 3.1 | Con la puerta principal **abierta**, orden: «A las HH:MM enciende la luz de la entrada y los aspersores; avísame si alguna puerta está abierta» (HH:MM = dentro de 2 min) | Se crean 3 tareas en la página | |
-| 3.2 | Mientras se espera, abrir y cerrar interruptores | La página se sigue actualizando (el sistema no se bloquea) | |
-| 3.3 | Llega la hora | Encienden la luz de la entrada y los 2 aspersores; aparece la alerta «Hay puertas abiertas (abiertas: Puerta principal)» y parpadea el LED rojo | |
-| 3.4 | Repetir con todas las puertas cerradas | Encienden las salidas pero **no** hay alerta («No se hizo ... porque la condición no se cumple») | |
+| # | Orden | Esperado | Resultado |
+|---|-------|----------|-----------|
+| 3.1 | `apaga la cosina` | Cocina **83 %** (cosina ≈ cocina) → apaga Cocina · confianza 91 % | |
+| 3.2 | `apaga la vodega` | Bodega **83 %** (vodega ≈ bodega) → apaga Bodega · confianza 91 % | |
+| 3.3 | `ensiende el despacho` | Encender **88 %** (ensiende ≈ enciende), Oficina 100 % → enciende Oficina · 94 % | |
 
-## 4. Secuencia temporizada (escenario 3)
+## 4. Sinónimos
 
-| # | Qué hacer | Resultado esperado | Resultado |
-|---|-----------|--------------------|-----------|
-| 4.1 | Orden: «Enciende la luz de la oficina a las HH:MM y, dos minutos después, enciende la del parqueadero» | 2 tareas, la segunda 2 minutos después de la primera | |
-| 4.2 | Esperar | Se encienden en ese orden y a esas horas | |
+| # | Orden | Esperado | Resultado |
+|---|-------|----------|-----------|
+| 4.1 | `desactiva el almacén` | Apagar 100 % (desactiva), Bodega 100 % (almacén) → apaga Bodega | |
+| 4.2 | `prende el comedor` | Encender 100 %, Cocina 100 % (comedor) → enciende Cocina | |
 
-## 5. Secuencia condicional (escenario 2)
+## 5. Órdenes incompletas o sin sentido (no debe cambiar ningún LED)
 
-| # | Qué hacer | Resultado esperado | Resultado |
-|---|-----------|--------------------|-----------|
-| 5.1 | Luces encendidas y una puerta **abierta**. Orden: «Revisa las puertas y, si todas están cerradas, apaga todas las luces» | Dice cuál puerta está abierta y «No se hizo 'apagar luces' porque la condición no se cumple». Las luces siguen encendidas | |
-| 5.2 | Cerrar todas las puertas y repetir | Las luces se apagan | |
+| # | Orden | Esperado | Resultado |
+|---|-------|----------|-----------|
+| 5.1 | `enciende la luz` | Encender 100 %, ningún lugar ≥ 70 % → **rojo** · «no en qué lugar» · confianza 50 % | |
+| 5.2 | `la cocina` | Cocina 100 %, ninguna acción ≥ 70 % → **rojo** · «no si quieres encender o apagar» | |
+| 5.3 | `hola como estas` | Nada ≥ 70 % → **rojo** · «No entendí la orden» · confianza 20 % | |
 
-## 6. Instrucciones ambiguas o inválidas
+## 6. Voz real
 
-| # | Qué hacer | Resultado esperado | Resultado |
-|---|-----------|--------------------|-----------|
-| 6.1 | Orden: «Enciende los aspersores más tarde» | ✅ `aclaracion` con una pregunta. **No** se crea ninguna tarea | |
-| 6.2 | Responder: «a las HH:MM» | Ahora sí se programa la tarea | |
-| 6.3 | Orden: «Abre la puerta principal» | `no_soportado` o rechazo; nada cambia | |
-| 6.4 | Orden: «Enciende la luz de la cocina» | Pregunta o rechazo («no existe»); nada cambia | |
-| 6.5 | `curl -X POST http://IP/api/plan -d @ejemplos/invalido_accion_desconocida.json` | HTTP 422, «acción no permitida 'borrar_memoria'» | |
-| 6.6 | Lo mismo con `invalido_hora_mal_escrita.json` | HTTP 422, «hora inválida» | |
-| 6.7 | Lo mismo con `invalido_abrir_puerta.json` | HTTP 422, «es una puerta/ventana: solo se puede consultar» | |
-| 6.8 | `curl -X POST http://IP/api/plan -d "{esto no es json"` | HTTP 400, «no es un JSON válido» | |
+| # | Qué hacer | Esperado | Resultado (texto que captó Chrome) |
+|---|-----------|----------|------------------------------------|
+| 6.1 | Pulsar 🎤 y decir «apaga la luz de la cocina» | Se apaga Cocina | |
+| 6.2 | Pulsar 🎤 y decir «prende todas las luces» | Se encienden todas | |
+| 6.3 | Pulsar 🎤 y hablar rápido o con ruido de fondo | Revisar el % de parecido aunque haya errores | |
 
-## 7. Gestión de tareas
+## 7. Interfaces
 
-| # | Qué hacer | Resultado esperado | Resultado |
-|---|-----------|--------------------|-----------|
-| 7.1 | Programar 2 tareas y pulsar *Cancelar* en una | Desaparece de la lista; aviso «Tarea #N cancelada» | |
-| 7.2 | Orden: «Cancela la tarea N» | Se cancela | |
-
-## 8. Recuperación tras reinicio
-
-| # | Qué hacer | Resultado esperado | Resultado |
-|---|-----------|--------------------|-----------|
-| 8.1 | Programar una tarea para dentro de 5 minutos y pulsar el botón **RST** del ESP32 | Al volver: aviso «Se recuperaron 1 tarea(s)...» y la tarea sigue en la lista con el mismo número | |
-| 8.2 | Esperar la hora | La tarea se ejecuta normalmente | |
-| 8.3 | Programar una tarea a 2 min, desconectar el ESP32 15 min y volver a conectarlo | La tarea **no** se ejecuta tarde; aparece la alerta «La tarea #N ... NO se ejecutó» | |
-
-## 9. Fallos de red y del LLM
-
-| # | Qué hacer | Resultado esperado | Resultado |
-|---|-----------|--------------------|-----------|
-| 9.1 | Poner una clave de API incorrecta y enviar una orden | Error «HTTP 401 ...», alerta, nada se ejecuta | |
-| 9.2 | Apagar el router con tareas programadas | Alerta «Se perdió el Wi-Fi»; las tareas se ejecutan igual a su hora | |
-| 9.3 | Encender el ESP32 sin router | Aparece la red «Agente-ESP32»; en 192.168.4.1 los botones funcionan | |
+| # | Qué hacer | Esperado | Resultado |
+|---|-----------|----------|-----------|
+| 7.1 | Tocar «Cocina» en el plano de la página | Cambia de estado (pasa por el mismo intérprete) | |
+| 7.2 | `Invoke-RestMethod http://IP/api/estado` | JSON con las 6 luces y su estado | |
+| 7.3 | Arrancar sin Wi-Fi configurado | Aparece la red «Asistente-ESP32»; la página abre en 192.168.4.1 | |
 
 ## Verificación del código
 
-- El sketch compila sin errores ni advertencias para **ESP32-S3** (core Arduino-ESP32 2.0.17,
-  ArduinoJson 7): usa ~17 % de la RAM y ~29 % de la memoria de programa.
-- Las pruebas de esta página se hacen en el prototipo físico y se registran arriba.
+- El programa compila sin errores ni advertencias para **ESP32-S3** (placa esp32 2.0.17,
+  ArduinoJson 7): usa ~14 % de la RAM y ~23 % de la memoria de programa.
+- Los porcentajes de la columna «Esperado» se calcularon ejecutando las secciones 2 a 5 del
+  código con estas frases. En la placa deben salir iguales.

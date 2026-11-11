@@ -1,8 +1,0 @@
-{
-  "tipo": "plan",
-  "acciones": [
-    {
-      "accion": "borrar_memoria"
-    }
-  ]
-}
