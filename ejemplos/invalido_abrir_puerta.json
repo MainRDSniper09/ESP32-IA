@@ -1,9 +1,0 @@
-{
-  "tipo": "plan",
-  "acciones": [
-    {
-      "accion": "encender",
-      "dispositivo": "puerta_principal"
-    }
-  ]
-}
