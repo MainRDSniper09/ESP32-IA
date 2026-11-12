@@ -8,20 +8,24 @@ habitación tiene su luz, representada por un **LED**. Le dices:
 > 🗣️ «Apaga la luz de la cocina»
 
 …y la ESP32 **interpreta la frase ella misma** (sin internet ni inteligencia artificial
-externa). Calcula **qué porcentaje se parece** cada palabra que escuchó a las palabras que
-conoce, decide qué quisiste decir y **apaga el LED de la cocina**. Un LED verde confirma que
-entendió.
+externa) con el algoritmo **TF-IDF**: convierte la orden en un vector de pesos, calcula el
+**porcentaje de similitud** (similitud coseno) con las frases de ejemplo que conoce, decide
+qué quisiste decir y **apaga el LED de la cocina**. Un LED verde confirma que entendió.
 
 ```
- "apaga la luz de la cosina"   (el reconocimiento de voz se equivocó en una letra)
+ "apaga la luz de la cocina"
 
-  ENCENDER       ####......  43%
-  APAGAR         ##########  100%  apaga ~ apaga        ← acción elegida
-  Recepción      ##........  29%
-  Oficina        ####......  43%
-  Cocina         ########..  83%  cosina ~ cocina      ← lugar elegido (supera el 70 %)
+  palabra    TF      IDF     TF-IDF
+  apaga      0.333   3.784   1.261
+  luz        0.333   0.840   0.280     ← "luz" está en muchas frases: pesa poco
+  cocina     0.333   3.091   1.030
+
+  ENCENDER        ..........    4%
+  APAGAR          #######...   78%  ~ "apaga la luz"       ← acción elegida
+  Oficina         ..........    4%  ~ "luz de la oficina"
+  Cocina          ######....   65%  ~ "luz de la cocina"   ← lugar elegido (llega al 30 %)
   ...
-  OK  Listo: apagué la luz de: Cocina   (confianza 91 %)
+  OK  Listo: apagué la luz de: Cocina   (confianza 71 %)
 ```
 
 ---
@@ -45,13 +49,12 @@ entendió.
 | «Apaga la luz de la cocina» | Apaga **un** LED |
 | «Enciende la oficina y la recepción» | Enciende **varios** LED |
 | «Prende todas las luces» / «Apaga las luces» | Enciende o apaga **todos** |
-| «Apaga la **cosina**» / «**Ensiende** el despacho» | Entiende aunque haya errores de reconocimiento |
 | «Desactiva el almacén» | Entiende **sinónimos** (almacén = bodega) |
 | «Enciende la luz» | Pregunta **dónde** (LED rojo) |
 | «Hola, ¿cómo estás?» | Dice que **no entendió** (LED rojo) |
 
-Además muestra, para cada orden, la **tabla de porcentajes** de parecido entre las palabras
-dichas y las conocidas, tanto en la página web como en el Monitor Serie.
+Además muestra, para cada orden, la **tabla TF-IDF** (peso de cada palabra) y el
+**porcentaje de similitud** con cada intención, tanto en la página web como en el Monitor Serie.
 
 ## 🧠 ¿Cómo funciona?
 
@@ -60,24 +63,32 @@ flowchart LR
     A([🗣️ Voz]) -->|micrófono del celular/PC| B[Navegador:<br/>voz → texto]
     B -->|"apaga la luz de la cocina"| C[ESP32-S3]
     K([⌨️ Monitor Serie]) --> C
-    C --> D[1. Limpiar texto<br/>apaga · cocina]
-    D --> E[2. Comparar cada palabra<br/>con el vocabulario<br/>→ % de parecido]
-    E --> F{3. ¿Supera el 70 %?}
+    C --> D[1. Limpiar texto<br/>apaga · luz · cocina]
+    D --> E[2. Vector TF-IDF<br/>de la orden]
+    E --> E2[3. Similitud coseno<br/>con cada frase del corpus<br/>→ % de similitud]
+    E2 --> F{4. ¿Llega al 30 %?}
     F -->|sí| G[💡 Cambiar LED<br/>+ LED verde]
     F -->|no| H[❓ Pedir más datos<br/>+ LED rojo]
 ```
 
 1. **Voz a texto:** lo hace el navegador (Google Chrome) con su micrófono. La ESP32 recibe el texto.
-2. **Limpieza:** minúsculas, sin tildes ni signos; se quitan palabras sin significado ("la", "de", "luz"...).
-3. **Porcentaje de parecido:** cada palabra se compara con el **vocabulario** del asistente
-   usando la **distancia de Levenshtein** (cuántas letras hay que cambiar). Por ejemplo,
-   «cosina» → «cocina» es 1 cambio de 6 letras = **83 %** de parecido.
-4. **Decisión:**
+2. **Limpieza:** minúsculas, sin tildes ni signos; se quitan palabras sin significado ("la", "de", "por favor"...).
+3. **Entrenamiento (al encender):** la ESP32 tiene un **corpus** de 44 frases de ejemplo,
+   cada una con su significado («apaga la luz» → apagar, «luz de la cocina» → cocina...).
+   Calcula el **IDF** de cada palabra y el **vector TF-IDF** de cada frase.
+4. **TF-IDF de la orden:**
+   - **TF** = veces que aparece la palabra / total de palabras de la orden.
+   - **IDF** = log(total de frases / frases que contienen la palabra). Las palabras comunes
+     («luz») pesan poco; las distintivas («cocina», «apaga») pesan mucho.
+   - **Peso = TF × IDF.**
+5. **Similitud coseno:** compara el vector de la orden con el de cada frase del corpus →
+   **porcentaje de similitud** de 0 % a 100 %.
+6. **Decisión:**
    - **Qué hacer:** la acción (encender/apagar) con mayor porcentaje.
-   - **Dónde:** las habitaciones que superen el **70 %**, o todas.
-5. **Acción:** cambia los LED y parpadea el verde (entendió) o el rojo (no entendió).
+   - **Dónde:** las habitaciones que lleguen al **30 %**, o todas.
+7. **Acción:** cambia los LED y parpadea el verde (entendió) o el rojo (no entendió).
 
-➡️ Explicación completa, con ejemplos y cómo "entrenarlo" con palabras nuevas: **[docs/COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md)**
+➡️ Explicación completa, con un ejemplo calculado a mano y cómo "entrenarlo" con frases nuevas: **[docs/COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md)**
 
 ## 🔌 Conexiones
 
@@ -129,7 +140,8 @@ Tienes tres formas de darle órdenes. Las tres pasan por el **mismo intérprete*
 | 🔌 **Monitor Serie** | Escribe la orden en el Arduino IDE y pulsa Enter (no necesita Wi-Fi) |
 
 La página muestra un **plano de la empresa** (las habitaciones se iluminan cuando su LED está
-encendido) y la **tabla de porcentajes** de la última orden.
+encendido), la **tabla TF-IDF** y los **porcentajes de similitud** de la última orden, y el
+**modelo entrenado** (vocabulario e IDF de cada palabra).
 
 También se puede usar desde otros programas con la **API**:
 
@@ -150,30 +162,31 @@ ESP32-IA/
 └── LICENSE
 ```
 
-`AgenteESP32.ino` está dividido en 10 secciones comentadas:
+`AgenteESP32.ino` está dividido en 11 secciones comentadas:
 
 | # | Sección | Qué contiene |
 |:--:|---------|--------------|
 | 1 | Wi-Fi | Nombre y clave de la red (o `credenciales.h`) y red de respaldo |
-| 2 | Habitaciones y pines | Tabla con cada habitación, su pin y sus nombres |
-| 3 | Vocabulario | Palabras para encender, apagar, "todas" y palabras ignoradas; umbral del 70 % |
-| 4 | Herramientas de texto | Normalizar, separar palabras, **distancia de Levenshtein**, % de parecido |
-| 5 | El intérprete | De texto a decisión: porcentajes, acción, lugares y confianza |
-| 6 | Ejecutar la decisión | Encender/apagar LED y parpadeo verde/rojo |
-| 7 | Monitor Serie | Recibir órdenes escritas y mostrar la tabla de porcentajes |
-| 8 | Página web | HTML, CSS y JavaScript (micrófono, plano, tabla) |
-| 9 | Servidor web y API | Rutas `/`, `/api/estado`, `/api/comando` |
-| 10 | `setup()` y `loop()` | Arranque y ciclo principal |
+| 2 | Habitaciones y pines | Tabla con cada habitación, su intención y su pin |
+| 3 | Corpus de entrenamiento | Frases de ejemplo con su intención, palabras vacías, umbral del 30 % |
+| 4 | Preparar el texto | `normalizar()`, `separarPalabras()`, `contarVeces()` |
+| 5 | **El algoritmo TF-IDF** | `construirVocabulario()`, `calcularIDF()`, `calcularVectorTFIDF()`, `similitudCoseno()`, `entrenarModelo()` |
+| 6 | El intérprete | `interpretar()`: de texto a decisión (acción, lugares y confianza) |
+| 7 | Encender / apagar los LED | Cambiar LED y parpadeo verde/rojo |
+| 8 | Monitor Serie | Mostrar el modelo entrenado, recibir órdenes y mostrar sus tablas |
+| 9 | Página web | HTML, CSS y JavaScript (micrófono, plano, tablas, modelo) |
+| 10 | Servidor web y API | Rutas `/`, `/api/estado`, `/api/modelo`, `/api/comando` |
+| 11 | `setup()` y `loop()` | Arranque (incluye entrenar el modelo) y ciclo principal |
 
 ## 📚 Documentación
 
 | Documento | Contenido |
 |-----------|-----------|
 | [TUTORIAL.md](docs/TUTORIAL.md) | Paso a paso: instalar, conectar, subir, abrir la página, activar el micrófono y probar |
-| [COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md) | El intérprete explicado: limpieza, Levenshtein, porcentajes, decisión, cómo enseñarle palabras |
+| [COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md) | El algoritmo TF-IDF explicado: limpieza, TF, IDF, similitud coseno, decisión, cómo enseñarle frases |
 | [CONEXIONES.md](docs/CONEXIONES.md) | Materiales, pines y cómo conectar los LED |
 | [API.md](docs/API.md) | Peticiones y respuestas JSON de la API |
-| [PRUEBAS.md](docs/PRUEBAS.md) | Lista de pruebas con los porcentajes esperados |
+| [PRUEBAS.md](docs/PRUEBAS.md) | Lista de pruebas con los porcentajes de similitud esperados |
 
 ## 🗺️ Próximas partes
 

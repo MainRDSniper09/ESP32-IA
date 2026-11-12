@@ -113,35 +113,55 @@ Esta prueba no necesita Wi-Fi ni navegador.
 1. **Herramientas → Monitor Serie** → **115200 baudio** (abajo a la derecha).
 2. Pulsa **RST** en la placa. Verás:
    ```
-   === Asistente de voz ESP32-S3 ===
+   === Asistente de voz ESP32-S3 (TF-IDF) ===
+
+   ========== MODELO TF-IDF ENTRENADO ==========
+   Documentos en el corpus: 44
+   Palabras en el vocabulario: 42
+   palabra           docs   IDF = log(N/docs)
+   enciende            1    3.784
+   luz                19    0.840
+   ...               (una línea por cada palabra)
+   =============================================
    Conectando a Wi-Fi.......
    Conectado. Abre en el navegador: http://192.168.1.60
    Listo. Escribe una orden aquí (ej: apaga la luz de la cocina) y pulsa Enter.
    ```
-   **Anota la dirección.**
+   **Anota la dirección.** La tabla del principio es el **entrenamiento**: la ESP32 calculó
+   el IDF de cada palabra de su corpus. Fíjate que `luz` tiene el IDF más bajo porque
+   aparece en 19 de las 44 frases.
 3. En la barra de texto del Monitor Serie escribe `prende todas las luces` y pulsa **Enter**.
    - ✅ Se encienden los 6 LED amarillos.
    - ✅ El verde parpadea 3 veces.
-   - ✅ Aparece la tabla de porcentajes:
+   - ✅ Aparece el análisis TF-IDF de la orden:
 
    ```
    ==================================================
    Orden recibida : "prende todas las luces"
-   Palabras clave : prende todas
+   Normalizada    : "prende todas las luces"
    --------------------------------------------------
-   ENCENDER      ########## 100%  prende ~ prende
-   APAGAR        ##........  20%  todas ~ desactivar
-   TODAS         ########## 100%  todas ~ todas
-   Recepción     ##........  29%  todas ~ entrada
-   ...           (una línea por cada habitación)
+   palabra            TF      IDF     TF-IDF
+   prende            0.333   3.784   1.261
+   todas             0.333   3.091   1.030
+   luces             0.333   3.091   1.030
    --------------------------------------------------
-   Confianza: 100%  (umbral para aceptar: 70%)
+   Similitud coseno con cada intención:
+   ENCENDER        ######....  64%  ~ "prende la luz"
+   APAGAR          ..........   0%
+   TODAS           #######...  76%  ~ "todas las luces"
+   Recepción       ..........   0%
+   ...             (una línea por cada habitación)
+   --------------------------------------------------
+   Confianza: 70%  (umbral para aceptar: 30%)
    OK  Listo: encendí la luz de: TODAS las habitaciones
    ==================================================
    ```
-4. Escribe `apaga la cosina` (con el error a propósito):
+4. Escribe `apaga la luz de la cocina`:
    - ✅ Se apaga solo el LED de la cocina (GPIO 7).
-   - ✅ La tabla muestra `Cocina ########.. 83%  cosina ~ cocina`.
+   - ✅ La tabla muestra `APAGAR #######... 78%  ~ "apaga la luz"` y
+     `Cocina ######.... 65%  ~ "luz de la cocina"`.
+   - ✅ En la tabla TF-IDF, `luz` pesa solo **0.280** y `cocina` **1.030**: el IDF le quita
+     peso a las palabras que aparecen en muchas frases.
 
 ---
 
@@ -159,7 +179,9 @@ La página tiene:
 - **🎤 Micrófono** y un cuadro para escribir, con frases de ejemplo.
 - **🏢 Plano de la empresa:** cada habitación se ilumina si su LED está encendido.
   Tocar una habitación también la enciende o apaga.
-- **🧠 Lo que entendió el asistente:** la tabla de porcentajes de la última orden.
+- **🧠 Lo que entendió el asistente:** el peso TF-IDF de cada palabra de la última orden y
+  su porcentaje de similitud con cada intención.
+- **📚 Modelo entrenado:** el vocabulario con el IDF de cada palabra.
 
 ---
 
@@ -191,7 +213,7 @@ Pulsa 🎤 y di cada frase (o escríbela). Observa los LED, el plano y la tabla:
 | # | Di | Debe pasar |
 |---|----|-----------|
 | 1 | «Prende todas las luces» | 6 LED amarillos encendidos · verde parpadea |
-| 2 | «Apaga la luz de la cocina» | Se apaga solo Cocina (GPIO 7) · Cocina 100 % |
+| 2 | «Apaga la luz de la cocina» | Se apaga solo Cocina (GPIO 7) · Cocina 65 % |
 | 3 | «Apaga la oficina y la recepción» | Se apagan dos LED a la vez |
 | 4 | «Enciende la luz del baño» | Se enciende Baño (GPIO 15) |
 | 5 | «Desactiva el almacén» | Se apaga Bodega: «almacén» es sinónimo |
@@ -199,7 +221,7 @@ Pulsa 🎤 y di cada frase (o escríbela). Observa los LED, el plano y la tabla:
 | 7 | «Hola, ¿cómo estás?» | Nada cambia · **rojo** parpadea · «No entendí» |
 | 8 | «Apaga las luces» | Se apagan todas |
 
-En la tabla, las barras **verdes** son las que superaron el **70 %** y se usaron para decidir.
+En la tabla, las barras **verdes** son las que llegaron al **30 %** y se usaron para decidir.
 La lista completa de pruebas, con los porcentajes esperados, está en [PRUEBAS.md](PRUEBAS.md).
 
 ---
@@ -217,5 +239,5 @@ La lista completa de pruebas, con los porcentajes esperados, está en [PRUEBAS.m
 | La página no abre | El celular/PC debe estar en la **misma red**. En redes de universidad los equipos a veces no se ven: usa el punto de acceso del celular |
 | 🎤: «El navegador bloqueó el micrófono» | Haz el paso 8, o usa el dictado del teclado |
 | 🎤: «Este navegador no reconoce voz» | Usa **Google Chrome** (Firefox no tiene reconocimiento de voz) |
-| Entiende mal una palabra | Mira en la tabla qué escuchó. Agrega esa palabra al vocabulario ([COMO_FUNCIONA.md §7](COMO_FUNCIONA.md#7-entrenar-al-asistente-con-palabras-nuevas)) |
+| Entiende mal una palabra | Mira en la tabla TF-IDF qué escuchó: si dice «no está en el corpus», agrega una frase con esa palabra al corpus ([COMO_FUNCIONA.md §11](COMO_FUNCIONA.md#11-entrenar-al-asistente-con-frases-nuevas)) |
 | Un LED no enciende | Está al revés (pata larga hacia la resistencia) o le falta GND |
