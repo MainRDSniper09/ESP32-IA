@@ -1,7 +1,7 @@
 /*
  * =============================================================================
  *   ASISTENTE DE VOZ PARA LAS LUCES DE UNA EMPRESA  —  PARTE 1
- *   ESP32-S3  ·  C++ (Arduino IDE)  ·  Interpretación de texto en el propio ESP32
+ *   ESP32-S3  ·  C++ (Arduino IDE)  ·  Algoritmo TF-IDF dentro del propio ESP32
  * =============================================================================
  *
  *  ¿QUÉ HACE?
@@ -13,11 +13,14 @@
  *
  *  1. El micrófono del celular o del PC (desde la página web) convierte la voz
  *     en texto. También se puede escribir en la página o en el Monitor Serie.
- *  2. El ESP32 INTERPRETA ese texto él mismo (sin internet, sin IA externa):
- *       - Compara cada palabra captada con las palabras que conoce.
- *       - Calcula un PORCENTAJE de parecido (0 % = nada que ver, 100 % = igual).
- *         Así entiende aunque el reconocimiento de voz se equivoque un poco
- *         ("cosina" se parece 83 % a "cocina").
+ *  2. El ESP32 INTERPRETA ese texto él mismo (sin internet, sin IA externa)
+ *     con el algoritmo TF-IDF:
+ *       - Tiene un CORPUS: una lista de frases de ejemplo, cada una con su
+ *         significado ("apaga la luz" = apagar, "luz de la cocina" = cocina...).
+ *       - Convierte cada frase, y también la orden recibida, en una lista de
+ *         números (un VECTOR TF-IDF): cuánto pesa cada palabra.
+ *       - Compara la orden con cada frase del corpus (SIMILITUD COSENO) y
+ *         obtiene un PORCENTAJE de similitud (0 % = nada que ver, 100 % = igual).
  *  3. Con esos porcentajes DECIDE:
  *       - QUÉ hacer: encender o apagar.
  *       - DÓNDE: una habitación, varias ("la cocina y la oficina") o todas.
@@ -46,11 +49,12 @@
  *
  *  SECCIONES DE ESTE ARCHIVO
  *  -------------------------
- *    1. Wi-Fi                       6. Ejecutar la decisión (LED)
- *    2. Habitaciones y pines        7. Monitor Serie
- *    3. Vocabulario ("entrenamiento") 8. Página web
- *    4. Herramientas de texto       9. Servidor web y API
- *    5. El intérprete (porcentajes) 10. setup() y loop()
+ *    1. Wi-Fi                          7. Encender / apagar los LED
+ *    2. Habitaciones y pines           8. Monitor Serie
+ *    3. Corpus de entrenamiento        9. Página web
+ *    4. Preparar el texto             10. Servidor web y API
+ *    5. El algoritmo TF-IDF           11. setup() y loop()
+ *    6. El intérprete (decisión)
  *
  *  Licencia MIT · Juan Nicolás Barreto Sánchez · 2026
  * =============================================================================
@@ -59,6 +63,7 @@
 #include <WiFi.h>         // conexión Wi-Fi
 #include <WebServer.h>    // página web y API
 #include <ArduinoJson.h>  // respuestas en formato JSON
+#include <math.h>         // log() y sqrt() para TF-IDF
 
 
 // =============================================================================
@@ -86,27 +91,27 @@
 // =============================================================================
 // 2. HABITACIONES Y PINES
 // -----------------------------------------------------------------------------
-//  Cada habitación tiene: nombre, pin del LED y las palabras con las que el
-//  usuario puede referirse a ella. Para agregar una habitación, añade una fila.
+//  Cada habitación tiene: el nombre que se muestra, su "intención" (la etiqueta
+//  con la que aparece en el corpus de la sección 3) y el pin de su LED.
 // =============================================================================
 
 #define PIN_LED_ENTENDIDO     17   // LED verde
 #define PIN_LED_NO_ENTENDIDO  18   // LED rojo
 
 struct Habitacion {
-  const char* nombre;          // cómo se muestra
-  int pin;                     // GPIO del LED
-  const char* palabras[5];     // cómo se le puede decir (sin tildes, en minúscula)
+  const char* nombre;      // cómo se muestra en pantalla
+  const char* intencion;   // etiqueta usada en el corpus (sección 3)
+  int pin;                 // GPIO del LED
 };
 
 const Habitacion HABITACIONES[] = {
-  // nombre            pin   palabras que la identifican
-  {"Recepción",        4,    {"recepcion", "entrada", "lobby"}},
-  {"Oficina",          5,    {"oficina", "despacho", "escritorio"}},
-  {"Sala de juntas",   6,    {"juntas", "reuniones", "reunion", "sala"}},
-  {"Cocina",           7,    {"cocina", "cafeteria", "comedor"}},
-  {"Baño",             15,   {"bano", "banos", "sanitario"}},
-  {"Bodega",           16,   {"bodega", "almacen", "deposito"}},
+  // nombre            intención       pin
+  {"Recepción",        "recepcion",    4},
+  {"Oficina",          "oficina",      5},
+  {"Sala de juntas",   "juntas",       6},
+  {"Cocina",           "cocina",       7},
+  {"Baño",             "bano",         15},
+  {"Bodega",           "bodega",       16},
 };
 const int NUM_HABITACIONES = sizeof(HABITACIONES) / sizeof(HABITACIONES[0]);
 
@@ -114,227 +119,467 @@ bool luzEncendida[NUM_HABITACIONES];   // estado actual de cada LED
 
 
 // =============================================================================
-// 3. VOCABULARIO (los "datos de entrenamiento" del asistente)
+// 3. CORPUS DE ENTRENAMIENTO
 // -----------------------------------------------------------------------------
-//  El asistente sabe lo que significa cada palabra de estas listas. Para que
-//  entienda una forma nueva de hablar, basta con AGREGAR la palabra aquí.
-//  Todas van en minúscula y sin tildes. La lista termina con nullptr.
+//  En TF-IDF cada frase de ejemplo se llama DOCUMENTO, y el conjunto de todas
+//  se llama CORPUS. Cada documento tiene:
+//     - frase:      un ejemplo de cómo habla el usuario.
+//     - intencion:  lo que significa. Puede ser "encender", "apagar", "todas"
+//                   o la intención de una habitación (columna 2 de la sección 2).
+//
+//  Para que el asistente entienda una forma nueva de hablar, basta con
+//  AGREGAR una fila aquí. Se pueden escribir con tildes y mayúsculas: el
+//  programa las limpia antes de usarlas.
 // =============================================================================
 
-const char* PALABRAS_ENCENDER[] = {
-  "enciende", "encender", "encienda", "enciendan", "prende", "prender", "prenda", "prendan",
-  "activa", "activar", "ilumina", "iluminar", nullptr
+struct Documento {
+  const char* frase;
+  const char* intencion;
 };
 
-const char* PALABRAS_APAGAR[] = {
-  "apaga", "apagar", "apague", "apaguen", "desactiva", "desactivar", "quita", "corta", nullptr
-};
+const Documento CORPUS[] = {
+  // ---------- ENCENDER ----------
+  {"enciende la luz",            "encender"},
+  {"encender la luz",            "encender"},
+  {"encienda la luz",            "encender"},
+  {"prende la luz",              "encender"},
+  {"prender la luz",             "encender"},
+  {"prenda la luz",              "encender"},
+  {"activa la luz",              "encender"},
+  {"ilumina",                    "encender"},
 
-const char* PALABRAS_TODAS[] = {
-  "todas", "todos", "todo", "toda", "general", nullptr
-};
+  // ---------- APAGAR ----------
+  {"apaga la luz",               "apagar"},
+  {"apagar la luz",              "apagar"},
+  {"apague la luz",              "apagar"},
+  {"desactiva la luz",           "apagar"},
+  {"quita la luz",               "apagar"},
+  {"corta la luz",               "apagar"},
 
-// Palabras que no aportan significado y se ignoran ("apaga LA luz DE LA cocina")
+  // ---------- TODAS LAS HABITACIONES ----------
+  {"todas las luces",            "todas"},
+  {"las luces",                  "todas"},
+  {"todas las habitaciones",     "todas"},
+  {"todo el piso",               "todas"},
+  {"toda la empresa",            "todas"},
+  {"general",                    "todas"},
+
+  // ---------- RECEPCIÓN ----------
+  {"luz de la recepción",        "recepcion"},
+  {"recepción",                  "recepcion"},
+  {"entrada",                    "recepcion"},
+  {"lobby",                      "recepcion"},
+
+  // ---------- OFICINA ----------
+  {"luz de la oficina",          "oficina"},
+  {"oficina",                    "oficina"},
+  {"despacho",                   "oficina"},
+  {"escritorio",                 "oficina"},
+
+  // ---------- SALA DE JUNTAS ----------
+  {"luz de la sala de juntas",   "juntas"},
+  {"sala de juntas",             "juntas"},
+  {"sala de reuniones",          "juntas"},
+  {"reunión",                    "juntas"},
+
+  // ---------- COCINA ----------
+  {"luz de la cocina",           "cocina"},
+  {"cocina",                     "cocina"},
+  {"cafetería",                  "cocina"},
+  {"comedor",                    "cocina"},
+
+  // ---------- BAÑO ----------
+  {"luz del baño",               "bano"},
+  {"baño",                       "bano"},
+  {"baños",                      "bano"},
+  {"sanitario",                  "bano"},
+
+  // ---------- BODEGA ----------
+  {"luz de la bodega",           "bodega"},
+  {"bodega",                     "bodega"},
+  {"almacén",                    "bodega"},
+  {"depósito",                   "bodega"},
+};
+const int NUM_DOCUMENTOS = sizeof(CORPUS) / sizeof(CORPUS[0]);
+
+// PALABRAS VACÍAS: palabras muy comunes que no aportan significado
+// ("apaga LA luz DE LA cocina"). Se eliminan antes de aplicar TF-IDF.
+// La lista termina con nullptr.
 const char* PALABRAS_VACIAS[] = {
-  "el", "la", "los", "las", "lo", "de", "del", "en", "y", "a", "al", "un", "una", "por", "favor",
-  "porfa", "me", "se", "que", "puedes", "podrias", "quiero", "luz", "luces", "foco", "focos",
-  "lampara", "lamparas", "ahora", "ya", "ok", "oye", "asistente", nullptr
+  "el", "la", "los", "las", "lo", "de", "del", "en", "y", "o", "a", "al", "un", "una",
+  "por", "favor", "porfa", "me", "mi", "se", "que", "con", "para", "puedes", "podrias",
+  "quiero", "ahora", "ya", "ok", "oye", "hola", "asistente", nullptr
 };
 
-// Porcentaje mínimo para aceptar que dos palabras "son la misma".
-// 70 % tolera errores pequeños del reconocimiento de voz ("cosina" ≈ "cocina").
-const int UMBRAL = 70;
+// Porcentaje mínimo de similitud para aceptar que la orden "habla de" una
+// intención. Con TF-IDF los porcentajes bajan cuando la orden tiene muchas
+// palabras (ej. "enciende la cocina y la oficina"), por eso el umbral es 30 %.
+const int UMBRAL = 30;
 
-// ---- Resultado del intérprete (se usa en la sección 5) ----------------------
-// (Se declara aquí, antes de cualquier función, porque el Arduino IDE lo exige.)
+// Tamaños máximos (la ESP32 tiene memoria limitada)
+const int MAX_VOCABULARIO = 150;   // palabras distintas en todo el corpus
+const int MAX_PALABRAS    = 20;    // palabras en una sola frase u orden
 
+
+// ---- Tipos que usa el intérprete -------------------------------------------
+// (Se declaran aquí, antes de cualquier función, porque el Arduino IDE lo exige.)
+
+// Una fila de la tabla TF-IDF de la orden recibida
+struct PesoPalabra {
+  String palabra;
+  float tf = 0;           // frecuencia en la orden
+  float idf = 0;          // qué tan rara es en el corpus
+  float tfidf = 0;        // tf x idf = peso final
+  bool conocida = false;  // ¿aparece en el corpus?
+};
+
+// La frase del corpus más parecida a la orden, para una intención
 struct Coincidencia {
-  int porcentaje;    // 0 a 100
-  String dicha;      // palabra que se captó (ej. "cosina")
-  String conocida;   // palabra del vocabulario a la que se parece (ej. "cocina")
+  int porcentaje = 0;     // similitud coseno x 100
+  String frase;           // frase del corpus que dio ese porcentaje
 };
 
+// Todo lo que el intérprete calculó y decidió sobre una orden
 struct Analisis {
   String texto;                              // tal como llegó
   String normalizado;                        // sin tildes ni signos
-  String palabrasClave;                      // las que se usaron para decidir
-  Coincidencia encender, apagar, todas;
+  PesoPalabra pesos[MAX_PALABRAS];           // tabla TF-IDF de la orden
+  int numPesos = 0;
+  Coincidencia encender, apagar, todas;      // % de cada intención
   Coincidencia lugar[NUM_HABITACIONES];
-  int accion;                                // 1 = encender, 0 = apagar, -1 = no se sabe
+  int accion = -1;                           // 1 = encender, 0 = apagar, -1 = no se sabe
   bool afectada[NUM_HABITACIONES];           // habitaciones a cambiar
-  int confianza;                             // % general de la decisión
-  bool entendido;
+  bool todasLasHabitaciones = false;
+  int confianza = 0;                         // % general de la decisión
+  bool entendido = false;
   String mensaje;
 };
 
 
 // =============================================================================
-// 4. HERRAMIENTAS DE TEXTO
+// 4. PREPARAR EL TEXTO
+// -----------------------------------------------------------------------------
+//  Antes de aplicar TF-IDF, el texto se limpia y se parte en palabras:
+//     "¡Apaga la Luz de la Cocina!"  ->  [apaga, luz, cocina]
 // =============================================================================
 
-// Pasa a minúsculas, quita tildes y signos: "¡Apaga la Cocina!" -> "apaga la cocina"
+// Pasa a minúsculas, quita tildes y signos:
+//   "¡Apaga la Cocina!" -> "apaga la cocina"
 String normalizar(String texto) {
   texto.toLowerCase();
+
+  // Cambiar letras con tilde por letras sin tilde
   const char* conTilde[] = {"á", "é", "í", "ó", "ú", "ü", "ñ", "Á", "É", "Í", "Ó", "Ú", "Ü", "Ñ"};
   const char* sinTilde[] = {"a", "e", "i", "o", "u", "u", "n", "a", "e", "i", "o", "u", "u", "n"};
-  for (int i = 0; i < 14; i++) texto.replace(conTilde[i], sinTilde[i]);
-
-  String limpio = "";
-  for (unsigned i = 0; i < texto.length(); i++) {
-    char c = texto[i];
-    bool letraONumero = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
-    limpio += letraONumero ? c : ' ';            // signos (¿?¡!,.) se vuelven espacios
+  for (int i = 0; i < 14; i++) {
+    texto.replace(conTilde[i], sinTilde[i]);
   }
-  while (limpio.indexOf("  ") >= 0) limpio.replace("  ", " ");
+
+  // Dejar solo letras y números; los signos (¿?¡!,.) se vuelven espacios
+  String limpio = "";
+  for (int i = 0; i < (int)texto.length(); i++) {
+    char c = texto[i];
+    bool esLetra  = (c >= 'a' && c <= 'z');
+    bool esNumero = (c >= '0' && c <= '9');
+    if (esLetra || esNumero) limpio += c;
+    else                     limpio += ' ';
+  }
+
+  // Quitar espacios repetidos y los de los extremos
+  while (limpio.indexOf("  ") >= 0) {
+    limpio.replace("  ", " ");
+  }
   limpio.trim();
   return limpio;
 }
 
-bool estaEnLista(const String& palabra, const char* lista[]) {
-  for (int i = 0; lista[i] != nullptr; i++) if (palabra == lista[i]) return true;
+// ¿La palabra está en la lista de palabras vacías?
+bool esPalabraVacia(const String& palabra) {
+  for (int i = 0; PALABRAS_VACIAS[i] != nullptr; i++) {
+    if (palabra == PALABRAS_VACIAS[i]) return true;
+  }
   return false;
 }
 
-// Separa el texto en palabras y descarta las "vacías". Devuelve cuántas quedaron.
-int separarPalabras(const String& texto, String palabras[], int maximo) {
+// Separa un texto YA normalizado en palabras, descartando las vacías.
+// Guarda las palabras en el arreglo "palabras" y devuelve cuántas quedaron.
+//   "apaga la luz de la cocina" -> palabras = [apaga, luz, cocina], devuelve 3
+int separarPalabras(const String& texto, String palabras[]) {
   int cantidad = 0;
   int inicio = 0;
-  while (inicio < (int)texto.length() && cantidad < maximo) {
-    int fin = texto.indexOf(' ', inicio);
-    if (fin < 0) fin = texto.length();
+  while (inicio < (int)texto.length() && cantidad < MAX_PALABRAS) {
+    int fin = texto.indexOf(' ', inicio);       // dónde termina esta palabra
+    if (fin < 0) fin = texto.length();          // era la última palabra
     String palabra = texto.substring(inicio, fin);
-    if (palabra.length() > 0 && !estaEnLista(palabra, PALABRAS_VACIAS)) palabras[cantidad++] = palabra;
+    if (palabra.length() > 0 && !esPalabraVacia(palabra)) {
+      palabras[cantidad] = palabra;
+      cantidad++;
+    }
     inicio = fin + 1;
   }
   return cantidad;
 }
 
-// DISTANCIA DE LEVENSHTEIN: cuántas letras hay que cambiar, agregar o quitar
-// para convertir una palabra en otra. "cosina" -> "cocina" = 1 cambio.
-int distanciaLevenshtein(const String& a, const String& b) {
-  const int MAX = 24;
-  int n = min((int)a.length(), MAX), m = min((int)b.length(), MAX);
-  int anterior[MAX + 1], actual[MAX + 1];
-  for (int j = 0; j <= m; j++) anterior[j] = j;
-  for (int i = 1; i <= n; i++) {
-    actual[0] = i;
-    for (int j = 1; j <= m; j++) {
-      int costo = (a[i - 1] == b[j - 1]) ? 0 : 1;
-      actual[j] = min(min(anterior[j] + 1, actual[j - 1] + 1), anterior[j - 1] + costo);
-    }
-    for (int j = 0; j <= m; j++) anterior[j] = actual[j];
-  }
-  return anterior[m];
-}
-
-// PORCENTAJE DE PARECIDO entre dos palabras (100 % = idénticas).
-// porcentaje = (1 - cambios / largo de la palabra más larga) x 100
-int parecido(const String& a, const String& b) {
-  int largo = max(a.length(), b.length());
-  if (largo == 0) return 0;
-  return (int)(100.0 * (1.0 - (float)distanciaLevenshtein(a, b) / largo) + 0.5);
-}
-
-// Busca, entre las palabras dichas, la que más se parece a alguna palabra de
-// la lista. Devuelve ese porcentaje y cuáles palabras coincidieron.
-int mejorParecido(String palabras[], int cantidad, const char* lista[], String& dicha, String& conocida) {
-  int mejor = 0;
-  dicha = "";
-  conocida = "";
+// Cuenta cuántas veces aparece "buscada" dentro de la lista de palabras.
+int contarVeces(const String palabras[], int cantidad, const String& buscada) {
+  int veces = 0;
   for (int i = 0; i < cantidad; i++) {
-    for (int j = 0; lista[j] != nullptr; j++) {
-      int p = parecido(palabras[i], lista[j]);
-      if (p > mejor) { mejor = p; dicha = palabras[i]; conocida = lista[j]; }
-    }
+    if (palabras[i] == buscada) veces++;
   }
-  return mejor;
+  return veces;
 }
 
 
 // =============================================================================
-// 5. EL INTÉRPRETE: de texto a decisión, con porcentajes
+// 5. EL ALGORITMO TF-IDF
+// -----------------------------------------------------------------------------
+//  TF-IDF le da a cada palabra un PESO que dice qué tan importante es:
+//
+//   TF  (Term Frequency, frecuencia del término)
+//       = veces que la palabra aparece en la frase / total de palabras de la frase
+//       Una palabra que se repite en la frase pesa más.
+//
+//   IDF (Inverse Document Frequency, frecuencia inversa de documento)
+//       = log( total de documentos / documentos que contienen la palabra )
+//       Una palabra que aparece en MUCHAS frases del corpus (ej. "luz") pesa
+//       poco porque no ayuda a distinguir. Una palabra RARA (ej. "cocina")
+//       pesa mucho porque identifica muy bien de qué se habla.
+//
+//   TF-IDF = TF x IDF
+//
+//  Cada frase se convierte en un VECTOR: una lista con un número por cada
+//  palabra del vocabulario (0 si la palabra no está en la frase).
+//
+//  Para comparar dos vectores se usa la SIMILITUD COSENO:
+//       coseno = (A · B) / (|A| x |B|)
+//  Da 1 (100 %) si las frases usan las mismas palabras con los mismos pesos,
+//  y 0 (0 %) si no comparten ninguna palabra.
+//
+//  ENTRENAR el modelo = calcular el vocabulario, el IDF y los vectores de todo
+//  el corpus. Se hace una sola vez, al encender la ESP32 (en setup()).
+// =============================================================================
+
+String vocabulario[MAX_VOCABULARIO];       // todas las palabras distintas del corpus
+int    tamanoVocabulario = 0;              // cuántas hay
+int    documentosConPalabra[MAX_VOCABULARIO];   // en cuántos documentos aparece cada una
+float  idf[MAX_VOCABULARIO];               // IDF de cada palabra
+float  vectoresCorpus[NUM_DOCUMENTOS][MAX_VOCABULARIO];   // vector TF-IDF de cada documento
+
+// Devuelve la posición de la palabra en el vocabulario, o -1 si no está.
+int buscarEnVocabulario(const String& palabra) {
+  for (int i = 0; i < tamanoVocabulario; i++) {
+    if (vocabulario[i] == palabra) return i;
+  }
+  return -1;
+}
+
+// PASO 1 DEL ENTRENAMIENTO: reunir todas las palabras distintas del corpus.
+void construirVocabulario() {
+  tamanoVocabulario = 0;
+  for (int d = 0; d < NUM_DOCUMENTOS; d++) {
+    String palabras[MAX_PALABRAS];
+    int cantidad = separarPalabras(normalizar(CORPUS[d].frase), palabras);
+
+    for (int i = 0; i < cantidad; i++) {
+      bool esNueva = (buscarEnVocabulario(palabras[i]) == -1);
+      if (esNueva && tamanoVocabulario < MAX_VOCABULARIO) {
+        vocabulario[tamanoVocabulario] = palabras[i];
+        tamanoVocabulario++;
+      }
+    }
+  }
+}
+
+// ¿El documento número d contiene la palabra?
+bool documentoContiene(int d, const String& palabra) {
+  String palabras[MAX_PALABRAS];
+  int cantidad = separarPalabras(normalizar(CORPUS[d].frase), palabras);
+  return contarVeces(palabras, cantidad, palabra) > 0;
+}
+
+// PASO 2 DEL ENTRENAMIENTO: calcular el IDF de cada palabra del vocabulario.
+//   IDF = log( total de documentos / documentos que contienen la palabra )
+void calcularIDF() {
+  for (int i = 0; i < tamanoVocabulario; i++) {
+    int documentos = 0;
+    for (int d = 0; d < NUM_DOCUMENTOS; d++) {
+      if (documentoContiene(d, vocabulario[i])) documentos++;
+    }
+    documentosConPalabra[i] = documentos;
+    idf[i] = log((float)NUM_DOCUMENTOS / documentos);
+  }
+}
+
+// Convierte un texto en su vector TF-IDF (un número por palabra del vocabulario).
+// Se usa igual para las frases del corpus y para la orden del usuario.
+//   TF     = veces que aparece la palabra / total de palabras del texto
+//   TF-IDF = TF x IDF
+void calcularVectorTFIDF(const String& texto, float vector[]) {
+  String palabras[MAX_PALABRAS];
+  int total = separarPalabras(normalizar(texto), palabras);
+
+  for (int i = 0; i < tamanoVocabulario; i++) {
+    float tf = 0;
+    if (total > 0) {
+      tf = (float)contarVeces(palabras, total, vocabulario[i]) / total;
+    }
+    vector[i] = tf * idf[i];
+  }
+}
+
+// SIMILITUD COSENO entre dos vectores TF-IDF: devuelve un valor de 0 a 1.
+//   coseno = (A · B) / (|A| x |B|)
+//   A · B = suma de A[i] x B[i]        (producto punto)
+//   |A|   = raíz de la suma de A[i]²   (largo del vector)
+float similitudCoseno(const float a[], const float b[]) {
+  float productoPunto = 0;
+  float sumaCuadradosA = 0;
+  float sumaCuadradosB = 0;
+  for (int i = 0; i < tamanoVocabulario; i++) {
+    productoPunto  += a[i] * b[i];
+    sumaCuadradosA += a[i] * a[i];
+    sumaCuadradosB += b[i] * b[i];
+  }
+  if (sumaCuadradosA == 0 || sumaCuadradosB == 0) return 0;   // un vector vacío no se parece a nada
+  return productoPunto / (sqrt(sumaCuadradosA) * sqrt(sumaCuadradosB));
+}
+
+// ENTRENAR: vocabulario -> IDF -> vector TF-IDF de cada documento del corpus.
+void entrenarModelo() {
+  construirVocabulario();
+  calcularIDF();
+  for (int d = 0; d < NUM_DOCUMENTOS; d++) {
+    calcularVectorTFIDF(CORPUS[d].frase, vectoresCorpus[d]);
+  }
+}
+
+
+// =============================================================================
+// 6. EL INTÉRPRETE: de texto a decisión
 // -----------------------------------------------------------------------------
 //  Pasos:
-//   a) Normalizar el texto y quedarse con las palabras importantes.
-//   b) Calcular % de parecido con "encender", "apagar", "todas" y cada habitación.
-//   c) Decidir: la acción con mayor % (si supera el UMBRAL) y los lugares que
-//      superen el UMBRAL. "todas" -> todas las habitaciones.
+//   a) Convertir la orden en su vector TF-IDF.
+//   b) Compararla (similitud coseno) con CADA documento del corpus. Para cada
+//      intención (encender, apagar, todas, cada habitación) se guarda el MAYOR
+//      porcentaje que obtuvo alguna de sus frases.
+//   c) Decidir:
+//        - Acción: la de mayor % entre encender y apagar, si llega al UMBRAL.
+//        - Lugar:  las habitaciones que lleguen al UMBRAL. Si no se nombró
+//                  ninguna pero "todas" llega al UMBRAL -> todas.
 // =============================================================================
+
+// Llena la tabla con el TF, IDF y TF-IDF de cada palabra de la orden
+// (solo para mostrarlo en pantalla; la decisión usa el vector completo).
+void calcularTablaDePesos(Analisis& r) {
+  String palabras[MAX_PALABRAS];
+  int total = separarPalabras(r.normalizado, palabras);
+  r.numPesos = 0;
+
+  for (int i = 0; i < total; i++) {
+    // Si la palabra se repite, ya está en la tabla: no se agrega dos veces
+    bool repetida = false;
+    for (int j = 0; j < r.numPesos; j++) {
+      if (r.pesos[j].palabra == palabras[i]) repetida = true;
+    }
+    if (repetida) continue;
+
+    int posicion = buscarEnVocabulario(palabras[i]);
+    PesoPalabra& fila = r.pesos[r.numPesos];
+    fila.palabra  = palabras[i];
+    fila.conocida = (posicion != -1);
+    fila.tf       = (float)contarVeces(palabras, total, palabras[i]) / total;
+    fila.idf      = fila.conocida ? idf[posicion] : 0;   // palabra desconocida: no pesa
+    fila.tfidf    = fila.tf * fila.idf;
+    r.numPesos++;
+  }
+}
+
+// Si el porcentaje nuevo es mayor que el guardado, lo reemplaza.
+void guardarSiEsMayor(Coincidencia& c, int porcentaje, const char* frase) {
+  if (porcentaje > c.porcentaje) {
+    c.porcentaje = porcentaje;
+    c.frase = frase;
+  }
+}
 
 Analisis interpretar(const String& texto) {
   Analisis r;
   r.texto = texto;
-
-  // a) Limpiar y separar palabras
   r.normalizado = normalizar(texto);
-  String palabras[20];
-  int cantidad = separarPalabras(r.normalizado, palabras, 20);
-  r.palabrasClave = "";
-  for (int i = 0; i < cantidad; i++) r.palabrasClave += (i ? " " : "") + palabras[i];
+  calcularTablaDePesos(r);
 
-  // b) Porcentajes de parecido
-  r.encender.porcentaje = mejorParecido(palabras, cantidad, PALABRAS_ENCENDER, r.encender.dicha, r.encender.conocida);
-  r.apagar.porcentaje   = mejorParecido(palabras, cantidad, PALABRAS_APAGAR,   r.apagar.dicha,   r.apagar.conocida);
-  r.todas.porcentaje    = mejorParecido(palabras, cantidad, PALABRAS_TODAS,    r.todas.dicha,    r.todas.conocida);
-  for (int h = 0; h < NUM_HABITACIONES; h++) {
-    const char* lista[6];
-    int k = 0;
-    while (k < 5 && HABITACIONES[h].palabras[k] != nullptr) { lista[k] = HABITACIONES[h].palabras[k]; k++; }
-    lista[k] = nullptr;
-    r.lugar[h].porcentaje = mejorParecido(palabras, cantidad, lista, r.lugar[h].dicha, r.lugar[h].conocida);
+  // a) Vector TF-IDF de la orden
+  float vectorOrden[MAX_VOCABULARIO];
+  calcularVectorTFIDF(texto, vectorOrden);
+
+  // b) Similitud coseno con cada documento del corpus
+  for (int d = 0; d < NUM_DOCUMENTOS; d++) {
+    float coseno = similitudCoseno(vectorOrden, vectoresCorpus[d]);
+    int porcentaje = round(coseno * 100);
+    String intencion = CORPUS[d].intencion;
+
+    if (intencion == "encender") guardarSiEsMayor(r.encender, porcentaje, CORPUS[d].frase);
+    if (intencion == "apagar")   guardarSiEsMayor(r.apagar,   porcentaje, CORPUS[d].frase);
+    if (intencion == "todas")    guardarSiEsMayor(r.todas,    porcentaje, CORPUS[d].frase);
+    for (int h = 0; h < NUM_HABITACIONES; h++) {
+      if (intencion == HABITACIONES[h].intencion) guardarSiEsMayor(r.lugar[h], porcentaje, CORPUS[d].frase);
+    }
   }
 
-  // c1) ¿Qué hacer? La acción con mayor porcentaje, si supera el umbral
+  // c1) ¿Qué hacer? La acción con mayor porcentaje, si llega al umbral
   int pctAccion = max(r.encender.porcentaje, r.apagar.porcentaje);
-  if (pctAccion >= UMBRAL && r.encender.porcentaje != r.apagar.porcentaje)
-    r.accion = (r.encender.porcentaje > r.apagar.porcentaje) ? 1 : 0;
-  else
-    r.accion = -1;
+  if (pctAccion >= UMBRAL && r.encender.porcentaje > r.apagar.porcentaje) r.accion = 1;
+  else if (pctAccion >= UMBRAL && r.apagar.porcentaje > r.encender.porcentaje) r.accion = 0;
+  else r.accion = -1;   // ninguna llega al umbral, o empatan
 
-  // c2) ¿Dónde? "todas" o las habitaciones que superen el umbral
-  int cuantas = 0, sumaPct = 0;
-  bool todas = r.todas.porcentaje >= UMBRAL;
-  // "apaga las luces" (plural, sin decir dónde) también significa todas
-  bool dijoLuces = (" " + r.normalizado + " ").indexOf(" luces ") >= 0;
+  // c2) ¿Dónde? Las habitaciones que lleguen al umbral
+  int cuantas = 0;
+  int sumaPorcentajes = 0;
   for (int h = 0; h < NUM_HABITACIONES; h++) {
-    r.afectada[h] = !todas && r.lugar[h].porcentaje >= UMBRAL;
-    if (r.afectada[h]) { cuantas++; sumaPct += r.lugar[h].porcentaje; }
+    r.afectada[h] = (r.lugar[h].porcentaje >= UMBRAL);
+    if (r.afectada[h]) {
+      cuantas++;
+      sumaPorcentajes += r.lugar[h].porcentaje;
+    }
   }
-  if (!todas && cuantas == 0 && dijoLuces) todas = true;
-  if (todas) {
+  // Si no nombró ninguna habitación pero dijo "todas" / "las luces" -> todas
+  if (cuantas == 0 && r.todas.porcentaje >= UMBRAL) {
+    r.todasLasHabitaciones = true;
     for (int h = 0; h < NUM_HABITACIONES; h++) r.afectada[h] = true;
-    cuantas = NUM_HABITACIONES;
-    sumaPct = (r.todas.porcentaje >= UMBRAL ? r.todas.porcentaje : 100) * NUM_HABITACIONES;
+    cuantas = 1;                                  // cuenta como un solo lugar: "todas"
+    sumaPorcentajes = r.todas.porcentaje;
   }
 
-  // c3) Decisión final y confianza = promedio entre el % de la acción y el de los lugares
-  int pctLugar = cuantas > 0 ? sumaPct / cuantas : 0;
+  // c3) Confianza = promedio entre el % de la acción y el % promedio de los lugares
+  int pctLugar = (cuantas > 0) ? sumaPorcentajes / cuantas : 0;
   r.confianza = (pctAccion + pctLugar) / 2;
-  r.entendido = r.accion != -1 && cuantas > 0;
+  r.entendido = (r.accion != -1 && cuantas > 0);
 
-  if (cantidad == 0) {
+  // c4) Mensaje para el usuario
+  if (r.numPesos == 0) {
     r.mensaje = "No escuché ninguna palabra importante. Intenta: \"apaga la luz de la cocina\".";
   } else if (r.accion == -1 && cuantas == 0) {
     r.mensaje = "No entendí la orden. Di qué hacer (encender/apagar) y dónde.";
   } else if (r.accion == -1) {
     r.mensaje = "Entendí el lugar, pero no si quieres encender o apagar.";
   } else if (cuantas == 0) {
-    r.mensaje = String("Entendí que quieres ") + (r.accion ? "encender" : "apagar") + ", pero no en qué lugar.";
+    r.mensaje = String("Entendí que quieres ") + (r.accion == 1 ? "encender" : "apagar") + ", pero no en qué lugar.";
   } else {
     String lista = "";
     for (int h = 0; h < NUM_HABITACIONES; h++) {
       if (!r.afectada[h]) continue;
-      if (lista.length()) lista += ", ";
+      if (lista.length() > 0) lista += ", ";
       lista += HABITACIONES[h].nombre;
     }
-    r.mensaje = String("Listo: ") + (r.accion ? "encendí" : "apagué") + " la luz de: " + (todas ? "TODAS las habitaciones" : lista);
+    if (r.todasLasHabitaciones) lista = "TODAS las habitaciones";
+    r.mensaje = String("Listo: ") + (r.accion == 1 ? "encendí" : "apagué") + " la luz de: " + lista;
   }
   return r;
 }
 
 
 // =============================================================================
-// 6. EJECUTAR LA DECISIÓN (LED)
+// 7. ENCENDER / APAGAR LOS LED
 // =============================================================================
 
 // Parpadeo del LED de respuesta (verde o rojo) sin usar delay()
@@ -376,35 +621,54 @@ Analisis procesarOrden(const String& texto) {
 
 
 // =============================================================================
-// 7. MONITOR SERIE (probar sin página web ni Wi-Fi)
+// 8. MONITOR SERIE (probar sin página web ni Wi-Fi)
 // -----------------------------------------------------------------------------
-//  Escribe una orden en el Monitor Serie y pulsa Enter. Se muestra el
-//  análisis completo con todos los porcentajes.
+//  Al encender se imprime el modelo entrenado (vocabulario e IDF).
+//  Escribe una orden en el Monitor Serie y pulsa Enter: se muestra la tabla
+//  TF-IDF de la orden y el % de similitud con cada intención.
 // =============================================================================
 
-String barra(int porcentaje) {           // "████████░░" para ver el % de un vistazo
+String barra(int porcentaje) {           // "########.." para ver el % de un vistazo
   String b = "";
   for (int i = 0; i < 10; i++) b += (i < porcentaje / 10) ? "#" : ".";
   return b;
+}
+
+void imprimirModelo() {
+  Serial.println();
+  Serial.println("========== MODELO TF-IDF ENTRENADO ==========");
+  Serial.printf("Documentos en el corpus: %d\n", NUM_DOCUMENTOS);
+  Serial.printf("Palabras en el vocabulario: %d\n", tamanoVocabulario);
+  Serial.println("palabra           docs   IDF = log(N/docs)");
+  for (int i = 0; i < tamanoVocabulario; i++) {
+    Serial.printf("%-16s  %3d    %.3f\n", vocabulario[i].c_str(), documentosConPalabra[i], idf[i]);
+  }
+  Serial.println("=============================================");
+}
+
+void imprimirCoincidencia(const char* nombre, const Coincidencia& c) {
+  Serial.printf("%-15s %s %3d%%  %s\n", nombre, barra(c.porcentaje).c_str(), c.porcentaje,
+                c.porcentaje > 0 ? ("~ \"" + c.frase + "\"").c_str() : "");
 }
 
 void imprimirAnalisis(const Analisis& r) {
   Serial.println();
   Serial.println("==================================================");
   Serial.println("Orden recibida : \"" + r.texto + "\"");
-  Serial.println("Palabras clave : " + r.palabrasClave);
+  Serial.println("Normalizada    : \"" + r.normalizado + "\"");
   Serial.println("--------------------------------------------------");
-  Serial.printf("ENCENDER      %s %3d%%  %s\n", barra(r.encender.porcentaje).c_str(), r.encender.porcentaje,
-                r.encender.dicha.length() ? (r.encender.dicha + " ~ " + r.encender.conocida).c_str() : "");
-  Serial.printf("APAGAR        %s %3d%%  %s\n", barra(r.apagar.porcentaje).c_str(), r.apagar.porcentaje,
-                r.apagar.dicha.length() ? (r.apagar.dicha + " ~ " + r.apagar.conocida).c_str() : "");
-  Serial.printf("TODAS         %s %3d%%  %s\n", barra(r.todas.porcentaje).c_str(), r.todas.porcentaje,
-                r.todas.dicha.length() ? (r.todas.dicha + " ~ " + r.todas.conocida).c_str() : "");
-  for (int h = 0; h < NUM_HABITACIONES; h++) {
-    const Coincidencia& c = r.lugar[h];
-    Serial.printf("%-14s%s %3d%%  %s\n", HABITACIONES[h].nombre, barra(c.porcentaje).c_str(), c.porcentaje,
-                  c.dicha.length() ? (c.dicha + " ~ " + c.conocida).c_str() : "");
+  Serial.println("palabra            TF      IDF     TF-IDF");
+  for (int i = 0; i < r.numPesos; i++) {
+    const PesoPalabra& p = r.pesos[i];
+    if (p.conocida) Serial.printf("%-16s  %.3f   %.3f   %.3f\n", p.palabra.c_str(), p.tf, p.idf, p.tfidf);
+    else            Serial.printf("%-16s  %.3f   (no está en el corpus, se ignora)\n", p.palabra.c_str(), p.tf);
   }
+  Serial.println("--------------------------------------------------");
+  Serial.println("Similitud coseno con cada intención:");
+  imprimirCoincidencia("ENCENDER", r.encender);
+  imprimirCoincidencia("APAGAR", r.apagar);
+  imprimirCoincidencia("TODAS", r.todas);
+  for (int h = 0; h < NUM_HABITACIONES; h++) imprimirCoincidencia(HABITACIONES[h].nombre, r.lugar[h]);
   Serial.println("--------------------------------------------------");
   Serial.printf("Confianza: %d%%  (umbral para aceptar: %d%%)\n", r.confianza, UMBRAL);
   Serial.println((r.entendido ? "OK  " : "??  ") + r.mensaje);
@@ -421,12 +685,13 @@ void revisarMonitorSerie() {
 
 
 // =============================================================================
-// 8. PÁGINA WEB (HTML + CSS + JavaScript)
+// 9. PÁGINA WEB (HTML + CSS + JavaScript)
 // -----------------------------------------------------------------------------
 //  - Botón de micrófono: el navegador convierte la voz en texto (Web Speech API)
-//    y lo envía al ESP32. El ESP32 hace TODA la interpretación.
+//    y lo envía al ESP32. El ESP32 hace TODA la interpretación (TF-IDF).
 //  - Plano de la empresa: cada habitación se ilumina si su LED está encendido.
-//  - Tabla de porcentajes: qué tanto se pareció cada palabra captada.
+//  - Tablas: pesos TF-IDF de la orden y % de similitud con cada intención.
+//  - Modelo: vocabulario e IDF calculados en el entrenamiento.
 //  Nota: en el JavaScript las funciones se escriben "const f = () => {}" porque
 //  el Arduino IDE confundiría "function f() {}" con una función de C++.
 // =============================================================================
@@ -444,13 +709,14 @@ const char PAGINA_WEB[] PROGMEM = R"HTML(
   h1 { font-size: 22px; margin: 0 0 12px; }
   .caja { background: white; border-radius: 12px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 3px #0002; }
   h2 { font-size: 16px; margin: 0 0 10px; }
+  h3 { font-size: 14px; margin: 14px 0 6px; }
   #microfono { width: 90px; height: 90px; border-radius: 50%; border: none; font-size: 40px; cursor: pointer;
                background: #0b7a75; color: white; display: block; margin: 0 auto 10px; }
   #microfono.escuchando { background: #c62828; animation: pulso 1s infinite; }
   @keyframes pulso { 50% { transform: scale(1.08); } }
   .centro { text-align: center; color: #555; font-size: 14px; }
   .fila { display: flex; gap: 8px; margin-top: 10px; }
-  input { flex: 1; font-size: 16px; padding: 10px; border: 1px solid #ccc; border-radius: 8px; }
+  input { flex: 1; min-width: 0; font-size: 16px; padding: 10px; border: 1px solid #ccc; border-radius: 8px; }
   button.enviar { padding: 10px 16px; border: none; border-radius: 8px; background: #0b7a75; color: white; font-size: 15px; cursor: pointer; }
   .plano { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .cuarto { border: 3px solid #555; border-radius: 6px; padding: 18px 6px; text-align: center; background: #2b2f36;
@@ -458,14 +724,17 @@ const char PAGINA_WEB[] PROGMEM = R"HTML(
   .cuarto.on { background: #ffe066; color: #333; box-shadow: 0 0 18px #ffd43b; }
   .cuarto b { display: block; font-size: 15px; } .cuarto small { font-size: 12px; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-size: 12px; color: #666; padding: 4px; border-bottom: 2px solid #ddd; }
   td { padding: 5px 4px; border-bottom: 1px solid #eee; }
   .barra { background: #e5e7eb; border-radius: 4px; height: 14px; width: 100%; }
   .relleno { height: 14px; border-radius: 4px; background: #9ca3af; }
   .relleno.ok { background: #16a34a; }
+  .gris { color: #999; }
   #resultado { font-size: 17px; font-weight: bold; margin-bottom: 8px; }
   .verde { color: #15803d; } .rojo { color: #b91c1c; }
   .ejemplo { display: inline-block; margin: 6px 6px 0 0; padding: 5px 10px; border-radius: 14px; background: #e3eeed;
              color: #0b5a56; font-size: 13px; cursor: pointer; }
+  .tablaModelo { max-height: 320px; overflow-y: auto; }
 </style>
 </head>
 <body>
@@ -488,17 +757,26 @@ const char PAGINA_WEB[] PROGMEM = R"HTML(
   </div>
 
   <div class="caja">
-    <h2>🧠 Lo que entendió el asistente</h2>
+    <h2>🧠 Lo que entendió el asistente (TF-IDF)</h2>
     <div id="resultado">Aún no hay órdenes.</div>
     <div id="captado" class="centro" style="text-align:left"></div>
+    <h3>1. Peso de cada palabra de la orden</h3>
+    <table id="tablaPesos"></table>
+    <h3>2. Similitud coseno con cada intención</h3>
     <table id="tabla"></table>
+  </div>
+
+  <div class="caja">
+    <h2>📚 Modelo entrenado</h2>
+    <div class="centro" style="text-align:left" id="resumenModelo"></div>
+    <div class="tablaModelo"><table id="tablaModelo"></table></div>
   </div>
 </div>
 
 <script>
-const UMBRAL = 70;
+const UMBRAL = 30;
 const EJEMPLOS = ["apaga la luz de la cocina", "enciende la oficina y la recepción", "prende todas las luces",
-                  "apaga las luces", "enciende la luz del baño", "apaga la cosina"];
+                  "apaga las luces", "enciende la luz del baño", "desactiva el almacén"];
 
 for (const e of EJEMPLOS) {
   const s = document.createElement("span");
@@ -549,22 +827,42 @@ const enviar = async () => {
 
 const fila = (nombre, c) => {
   const ok = c.porcentaje >= UMBRAL;
-  const palabras = c.dicha ? `"${c.dicha}" ≈ "${c.conocida}"` : "";
-  return `<tr><td style="width:28%">${nombre}</td>
-    <td style="width:35%"><div class="barra"><div class="relleno ${ok ? "ok" : ""}" style="width:${c.porcentaje}%"></div></div></td>
-    <td style="width:10%"><b>${c.porcentaje}%</b></td><td style="color:#666">${palabras}</td></tr>`;
+  const frase = c.porcentaje > 0 ? `≈ "${c.frase}"` : "";
+  return `<tr><td style="width:24%">${nombre}</td>
+    <td style="width:32%"><div class="barra"><div class="relleno ${ok ? "ok" : ""}" style="width:${c.porcentaje}%"></div></div></td>
+    <td style="width:10%"><b>${c.porcentaje}%</b></td><td style="color:#666">${frase}</td></tr>`;
 };
 
 const mostrar = (d) => {
   const res = document.getElementById("resultado");
   res.className = d.entendido ? "verde" : "rojo";
   res.textContent = (d.entendido ? "✅ " : "❓ ") + d.mensaje + "  (confianza " + d.confianza + "%)";
-  document.getElementById("captado").textContent =
-    "Texto: \"" + d.texto + "\"  →  palabras clave: " + (d.palabras_clave || "(ninguna)");
+  document.getElementById("captado").textContent = "Texto: \"" + d.texto + "\"  →  normalizado: \"" + d.normalizado + "\"";
+
+  let p = "<tr><th>Palabra</th><th>TF</th><th>IDF</th><th>TF-IDF</th></tr>";
+  for (const w of d.pesos) {
+    p += w.conocida
+      ? `<tr><td>${w.palabra}</td><td>${w.tf.toFixed(3)}</td><td>${w.idf.toFixed(3)}</td><td><b>${w.tfidf.toFixed(3)}</b></td></tr>`
+      : `<tr class="gris"><td>${w.palabra}</td><td>${w.tf.toFixed(3)}</td><td colspan=2>no está en el corpus (se ignora)</td></tr>`;
+  }
+  document.getElementById("tablaPesos").innerHTML = p;
+
   let t = "<tr><td colspan=4><b>¿Qué hacer?</b></td></tr>" + fila("Encender", d.encender) + fila("Apagar", d.apagar);
-  t += "<tr><td colspan=4><b>¿Dónde?</b> (verde = supera el " + UMBRAL + "%)</td></tr>" + fila("Todas", d.todas);
+  t += "<tr><td colspan=4><b>¿Dónde?</b> (verde = llega al " + UMBRAL + "%)</td></tr>" + fila("Todas", d.todas);
   for (const l of d.lugares) t += fila(l.nombre, l);
   document.getElementById("tabla").innerHTML = t;
+};
+
+// ---------- Modelo entrenado (vocabulario e IDF) ----------
+const cargarModelo = async () => {
+  const m = await (await fetch("/api/modelo")).json();
+  document.getElementById("resumenModelo").textContent =
+    m.documentos + " frases en el corpus · " + m.vocabulario.length + " palabras distintas · IDF = log(" +
+    m.documentos + " / documentos con la palabra). Las palabras comunes (IDF bajo) pesan menos.";
+  const filas = m.vocabulario.sort((a, b) => a.idf - b.idf).map(v =>
+    `<tr><td>${v.palabra}</td><td>${v.documentos}</td><td>${v.idf.toFixed(3)}</td></tr>`).join("");
+  document.getElementById("tablaModelo").innerHTML =
+    "<tr><th>Palabra</th><th>Documentos que la tienen</th><th>IDF</th></tr>" + filas;
 };
 
 // ---------- Plano de la empresa ----------
@@ -581,6 +879,7 @@ const tocar = (nombre, encendida) => {
   enviar();
 };
 
+cargarModelo();
 actualizar();
 setInterval(actualizar, 2000);
 </script>
@@ -590,20 +889,28 @@ setInterval(actualizar, 2000);
 
 
 // =============================================================================
-// 9. SERVIDOR WEB Y API
+// 10. SERVIDOR WEB Y API
 // -----------------------------------------------------------------------------
 //   GET  /              página web
 //   GET  /api/estado    estado de cada luz
+//   GET  /api/modelo    corpus, vocabulario e IDF (el modelo entrenado)
 //   POST /api/comando   {"texto": "apaga la luz de la cocina"} -> análisis completo
 //  Detalle en docs/API.md
 // =============================================================================
 
 WebServer servidor(80);
 
+float redondear(float x) { return round(x * 1000) / 1000.0; }   // 3 decimales
+
 void agregarCoincidencia(JsonObject o, const Coincidencia& c) {
   o["porcentaje"] = c.porcentaje;
-  o["dicha"] = c.dicha;
-  o["conocida"] = c.conocida;
+  o["frase"] = c.frase;
+}
+
+void enviarJson(JsonDocument& doc) {
+  String texto;
+  serializeJson(doc, texto);
+  servidor.send(200, "application/json; charset=utf-8", texto);
 }
 
 void rutaPagina() { servidor.send_P(200, "text/html; charset=utf-8", PAGINA_WEB); }
@@ -617,9 +924,26 @@ void rutaEstado() {
     l["pin"] = HABITACIONES[h].pin;
     l["encendida"] = luzEncendida[h];
   }
-  String texto;
-  serializeJson(doc, texto);
-  servidor.send(200, "application/json; charset=utf-8", texto);
+  enviarJson(doc);
+}
+
+void rutaModelo() {
+  JsonDocument doc;
+  doc["documentos"] = NUM_DOCUMENTOS;
+  JsonArray vocab = doc["vocabulario"].to<JsonArray>();
+  for (int i = 0; i < tamanoVocabulario; i++) {
+    JsonObject v = vocab.add<JsonObject>();
+    v["palabra"] = vocabulario[i];
+    v["documentos"] = documentosConPalabra[i];
+    v["idf"] = redondear(idf[i]);
+  }
+  JsonArray corpus = doc["corpus"].to<JsonArray>();
+  for (int d = 0; d < NUM_DOCUMENTOS; d++) {
+    JsonObject c = corpus.add<JsonObject>();
+    c["frase"] = CORPUS[d].frase;
+    c["intencion"] = CORPUS[d].intencion;
+  }
+  enviarJson(doc);
 }
 
 void rutaComando() {
@@ -634,12 +958,22 @@ void rutaComando() {
   JsonDocument doc;
   doc["texto"] = r.texto;
   doc["normalizado"] = r.normalizado;
-  doc["palabras_clave"] = r.palabrasClave;
   doc["entendido"] = r.entendido;
   doc["accion"] = r.accion == 1 ? "encender" : (r.accion == 0 ? "apagar" : "desconocida");
   doc["confianza"] = r.confianza;
   doc["umbral"] = UMBRAL;
   doc["mensaje"] = r.mensaje;
+
+  JsonArray pesos = doc["pesos"].to<JsonArray>();
+  for (int i = 0; i < r.numPesos; i++) {
+    JsonObject p = pesos.add<JsonObject>();
+    p["palabra"] = r.pesos[i].palabra;
+    p["conocida"] = r.pesos[i].conocida;
+    p["tf"] = redondear(r.pesos[i].tf);
+    p["idf"] = redondear(r.pesos[i].idf);
+    p["tfidf"] = redondear(r.pesos[i].tfidf);
+  }
+
   agregarCoincidencia(doc["encender"].to<JsonObject>(), r.encender);
   agregarCoincidencia(doc["apagar"].to<JsonObject>(), r.apagar);
   agregarCoincidencia(doc["todas"].to<JsonObject>(), r.todas);
@@ -651,14 +985,12 @@ void rutaComando() {
     agregarCoincidencia(l, r.lugar[h]);
     if (r.entendido && r.afectada[h]) afectadas.add(HABITACIONES[h].nombre);
   }
-  String texto;
-  serializeJson(doc, texto);
-  servidor.send(200, "application/json; charset=utf-8", texto);
+  enviarJson(doc);
 }
 
 
 // =============================================================================
-// 10. setup() y loop()
+// 11. setup() y loop()
 // =============================================================================
 
 void conectarWiFi() {
@@ -683,7 +1015,7 @@ void conectarWiFi() {
 void setup() {
   Serial.begin(115200);
   delay(500);
-  Serial.println("\n=== Asistente de voz ESP32-S3 ===");
+  Serial.println("\n=== Asistente de voz ESP32-S3 (TF-IDF) ===");
 
   for (int h = 0; h < NUM_HABITACIONES; h++) {
     pinMode(HABITACIONES[h].pin, OUTPUT);
@@ -692,9 +1024,13 @@ void setup() {
   pinMode(PIN_LED_ENTENDIDO, OUTPUT);
   pinMode(PIN_LED_NO_ENTENDIDO, OUTPUT);
 
+  entrenarModelo();                             // calcula vocabulario, IDF y vectores
+  imprimirModelo();
+
   conectarWiFi();
   servidor.on("/", HTTP_GET, rutaPagina);
   servidor.on("/api/estado", HTTP_GET, rutaEstado);
+  servidor.on("/api/modelo", HTTP_GET, rutaModelo);
   servidor.on("/api/comando", HTTP_POST, rutaComando);
   servidor.begin();
 
